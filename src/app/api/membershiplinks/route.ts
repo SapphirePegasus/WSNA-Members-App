@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     try {
         const { localUnitFormatted, districtCode, isUnionMember } = await req.json();
 
-        let result: any = {
+        const result: any = {
             localUnits: [],
             regional: null,
             wsnaBenefits: null,
@@ -335,6 +335,7 @@ export async function POST(req: Request) {
         );
     }
 }
+
 
 
 
