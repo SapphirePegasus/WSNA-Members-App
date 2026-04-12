@@ -1,0 +1,53 @@
+"use client";
+
+import { useState } from "react";
+import MembershipCard from "@/app/components/global/MembershipCard";
+
+type TabConfig = {
+    id: string;
+    label: string;
+    component: React.ReactNode;
+};
+
+export default function MembershipPageContent() {
+    const tabs: TabConfig[] = [
+        {
+            id: "card",
+            label: "Membership Card",
+            component: <MembershipCard />,
+        },
+        {
+            id: "resources",
+            label: "Resources",
+            component: <div>UNDER DEVELOPMENT</div>,
+        },
+
+    ];
+
+    const [activeTab, setActiveTab] = useState(tabs[0].id);
+
+    const activeTabContent = tabs.find((tab) => tab.id === activeTab)?.component;
+
+    return (
+        <div>
+            {/* Tabs */}
+            <div className="px-4 pt-2 flex gap-6 text-sm font-medium overflow-x-auto scrollbar-hidden whitespace-nowrap">
+                {tabs.map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`py-2 cursor-pointer text-base ${activeTab === tab.id
+                            ? "border-b-3 border-black text-foreground font-semibold"    //active
+                            : "border-b-3 border-transparent text-gray-500 font-semibold"  //inactive
+                            }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Content */}
+            <div className="w-full mx-auto">{activeTabContent}</div>
+        </div>
+    );
+}
