@@ -2,10 +2,8 @@ import type { RawTopicEntry, TopicNode } from "@/app/types/resources";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FORMAT FILE SIZE
-// Converts raw bytes from the Craft CMS GraphQL response into a human-readable
-// string matching the org's existing website pattern (e.g. "148.9 KB", "1.2 MB").
-// Always produces one decimal place for consistency — "1.0 MB" not "1 MB".
-// Returns "0 KB" for zero or negative values rather than throwing.
+// Converts raw bytes from the Craft CMS GraphQL response into a readable
+// string matching the design pattern (e.g. "148 KB", "1 MB").
 // ─────────────────────────────────────────────────────────────────────────────
 export function formatFileSize(bytes: number): string {
     if (!bytes || bytes <= 0) return "0 KB";
@@ -14,9 +12,9 @@ export function formatFileSize(bytes: number): string {
     const MB = 1024 * KB;
     const GB = 1024 * MB;
 
-    if (bytes >= GB) return `${(bytes / GB).toFixed(1)} GB`;
-    if (bytes >= MB) return `${(bytes / MB).toFixed(1)} MB`;
-    return `${(bytes / KB).toFixed(1)} KB`;
+    if (bytes >= GB) return `${Math.floor(bytes / GB)} GB`;
+    if (bytes >= MB) return `${Math.floor(bytes / MB)} MB`;
+    return `${Math.floor(bytes / KB)} KB`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,7 +34,7 @@ export function formatFileKindLabel(kind: string): string {
 // Recursively determines whether a topic node should be rendered at all.
 // A topic is visible if it directly has files, or if any of its descendants
 // (at any depth) have files. Topics with no files anywhere in their subtree
-// are silently omitted per the spec.
+// are silently omitted as per the spec.
 // This runs on the tree after it has been built, not on raw entries, because
 // we need the full subtree available to check descendants.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -49,7 +47,7 @@ export function topicHasVisibleContent(topic: TopicNode): boolean {
 // BUILD TOPIC TREE
 // Converts the flat ordered list returned by GraphQL into a typed tree of
 // TopicNode objects. Uses parent.id references (not lft/rgt) because parent
-// references are explicit and safe — lft/rgt nested-set arithmetic is
+// references are explicit and safe - lft/rgt nested-set arithmetic is
 // fragile if Craft ever returns entries out of order.
 //
 // Algorithm:
@@ -59,10 +57,10 @@ export function topicHasVisibleContent(topic: TopicNode): boolean {
 //   3. After building, filter the root array to only nodes with visible
 //      content (recursion handles subtrees).
 //
-// Time complexity: O(n) — single pass through the flat list.
+// Time complexity: O(n) - single pass through the flat list.
 // ─────────────────────────────────────────────────────────────────────────────
 export function buildTopicTree(entries: RawTopicEntry[]): TopicNode[] {
-    // Step 1 — initialise every entry as a TopicNode with an empty children array
+    // Step 1 - initialise every entry as a TopicNode with an empty children array
     const nodeMap = new Map<string, TopicNode>();
 
     for (const entry of entries) {
@@ -79,7 +77,7 @@ export function buildTopicTree(entries: RawTopicEntry[]): TopicNode[] {
         });
     }
 
-    // Step 2 — wire up parent → child relationships
+    // Step 2 - wire up parent → child relationships
     const roots: TopicNode[] = [];
 
     for (const entry of entries) {
@@ -100,6 +98,6 @@ export function buildTopicTree(entries: RawTopicEntry[]): TopicNode[] {
         }
     }
 
-    // Step 3 — prune topics with no visible content anywhere in their subtree
+    // Step 3 - prune topics with no visible content anywhere in their subtree
     return roots.filter(topicHasVisibleContent);
 }

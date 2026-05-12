@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import MembershipCard from "@/app/components/global/MembershipCard";
 import Resources from "../global/Resources";
 
@@ -11,6 +12,9 @@ type TabConfig = {
 };
 
 export default function MembershipPageContent() {
+    const searchParams = useSearchParams();
+    const initialTab = searchParams.get("tab") ?? "card";
+
     const tabs: TabConfig[] = [
         {
             id: "card",
@@ -40,14 +44,16 @@ export default function MembershipPageContent() {
 
     ];
 
-    const [activeTab, setActiveTab] = useState(tabs[0].id);
+    const [activeTab, setActiveTab] = useState(
+        tabs.some(t => t.id === initialTab) ? initialTab : tabs[0].id
+    );
 
     const activeTabContent = tabs.find((tab) => tab.id === activeTab)?.component;
 
     return (
         <div>
             {/* Tabs */}
-            <div className="px-4 pt-2 flex gap-6 text-sm font-medium overflow-x-auto scrollbar-hidden whitespace-nowrap">
+            <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-2 flex gap-6 text-sm font-medium overflow-x-auto scrollbar-hidden whitespace-nowrap">
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}

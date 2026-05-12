@@ -1,5 +1,3 @@
-// src/app/hooks/useMembershipLinks.ts
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -8,10 +6,11 @@ import type {
     MembershipLinksResponse,
     MembershipLinksRequest,
 } from "@/app/types/membership";
+import { getIdToken } from "@/app/lib/getIdToken";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODULE-LEVEL CACHE
-// Keyed by contactId — each member gets their own cache entry.
+// Keyed by contactId - each member gets their own cache entry.
 // Survives component unmounts, tab switches, and re-renders for the lifetime
 // of the browser session. Same pattern as useResources.
 //
@@ -39,11 +38,11 @@ interface UseMembershipLinksState {
 //
 // Returns loading: true on first call while fetching.
 // Returns cached data synchronously on subsequent calls (tab switches,
-// remounts) — no network request, no loading flash.
+// remounts) - no network request, no loading flash.
 //
 // Returns data: null with error set if the fetch fails.
 // Returns data: null with loading: false if the contact has no contactid
-// (should not happen for authenticated users — defensive guard only).
+// (should not happen for authenticated users - defensive guard only).
 //
 // Usage:
 //   const { data, loading, error } = useMembershipLinks();
@@ -54,7 +53,7 @@ export function useMembershipLinks(): UseMembershipLinksState {
     // ─────────────────────────────────────────────────────────────────────────
     // Initialise from cache synchronously if available.
     // If the user has already loaded the membership card this session,
-    // the component renders with data immediately — no spinner, no flash.
+    // the component renders with data immediately - no spinner, no flash.
     // ─────────────────────────────────────────────────────────────────────────
     const [state, setState] = useState<UseMembershipLinksState>(() => {
         if (!contact?.contactid) {
@@ -70,13 +69,13 @@ export function useMembershipLinks(): UseMembershipLinksState {
     });
 
     useEffect(() => {
-        // Guard — contact must be present with a valid id
+        // Guard - contact must be present with a valid id
         if (!contact?.contactid) {
             setState({ data: null, loading: false, error: null });
             return;
         }
 
-        // Cache hit — update state from cache and bail, no fetch needed
+        // Cache hit - update state from cache and bail, no fetch needed
         const cached = membershipLinksCache.get(contact.contactid);
         if (cached) {
             setState({ data: cached, loading: false, error: null });
@@ -94,7 +93,7 @@ export function useMembershipLinks(): UseMembershipLinksState {
 
         async function fetchAndCache(): Promise<void> {
             // Build request payload from contact context.
-            // All fields are derived here — no prop drilling required.
+            // All fields are derived here - no prop drilling required.
             const payload: MembershipLinksRequest = {
                 facilityCode: contact!.primaryFacilityCode,
                 districtCode: contact!.districtCode,
@@ -102,12 +101,32 @@ export function useMembershipLinks(): UseMembershipLinksState {
             };
 
             try {
+                const idToken = await getIdToken();
+                if (!idToken) {
+                    setState({
+                        data: null,
+                        loading: false,
+                        error: "Session expired. Please sign in again.",
+                    });
+                    return;
+                }
+
                 const res = await fetch("/api/membershiplinks", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${idToken}`,
+                    },
                     body: JSON.stringify(payload),
                     signal: controller.signal,
                 });
+
+                if (res.status === 429) {
+                    const retryAfter = res.headers.get("Retry-After") ?? "60";
+                    throw new Error(
+                        `Too many requests. Please wait ${retryAfter} seconds before trying again.`
+                    );
+                }
 
                 if (!res.ok) {
                     const body = await res.json().catch(() => ({}));
@@ -119,7 +138,7 @@ export function useMembershipLinks(): UseMembershipLinksState {
 
                 const data: MembershipLinksResponse = await res.json();
 
-                // Populate cache before setting state — any concurrent mount
+                // Populate cache before setting state - any concurrent mount
                 // of the same contact will hit the cache immediately
                 membershipLinksCache.set(contact!.contactid, data);
 
@@ -129,7 +148,7 @@ export function useMembershipLinks(): UseMembershipLinksState {
             } catch (err) {
                 if (cancelled) return;
 
-                // AbortError is intentional cancellation — not a real error
+                // AbortError is intentional cancellation - not a real error
                 if (
                     err instanceof DOMException &&
                     err.name === "AbortError"
@@ -155,14 +174,14 @@ export function useMembershipLinks(): UseMembershipLinksState {
 
         fetchAndCache();
 
-        // Cleanup — abort in-flight request and mark as cancelled so any
+        // Cleanup - abort in-flight request and mark as cancelled so any
         // stale setState calls after unmount are silently dropped
         return () => {
             cancelled = true;
             controller.abort();
         };
     }, [contact?.contactid]);
-    // ↑ Dependency is contactid only — not the full contact object.
+    // ↑ Dependency is contactid only - not the full contact object.
     // The object reference changes on every render but contactid is stable.
     // This prevents the effect from re-running unnecessarily.
 

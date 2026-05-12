@@ -20,6 +20,11 @@ export default function UserMenuMobile() {
     router.push("/membership");
   };
 
+  const handleLogout = async () => {
+    setIsOpen(false);
+    await logout();
+  };
+
   return (
     <>
       <button onClick={() => setIsOpen(true)} className="p-2">
@@ -56,7 +61,7 @@ export default function UserMenuMobile() {
           {/* Sign out */}
           <div className="px-4 py-4 bg-white">
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="flex items-center gap-2 text-sm text-red-500 cursor-pointer"
             >
               <SignOutCrossIcon height={18} width={16} />

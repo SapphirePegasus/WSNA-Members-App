@@ -1,19 +1,20 @@
 import type { Configuration } from "@azure/msal-browser";
+import {
+  getMsalClientId,
+  getMsalTenant,
+  getMsalRedirectUri,
+} from "@/app/lib/env";
 
-if (!process.env.NEXT_PUBLIC_MSAL_CLIENT_ID) {
-  throw new Error("Missing environment variable: NEXT_PUBLIC_MSAL_CLIENT_ID");
-}
-
-if (!process.env.NEXT_PUBLIC_MSAL_TENANT) {
-  throw new Error("Missing environment variable: NEXT_PUBLIC_MSAL_TENANT");
-}
-
+// msalConfig and loginRequest are plain objects - their property values
+// are functions called here at module evaluation time. This is fine on
+// the server. On the client, Next.js inlines NEXT_PUBLIC_ literals before
+// the module evaluates, so the getters resolve correctly in both contexts.
 export const msalConfig: Configuration = {
   auth: {
-    clientId: process.env.NEXT_PUBLIC_MSAL_CLIENT_ID,
-    authority: `https://login.microsoftonline.com/${process.env.NEXT_PUBLIC_MSAL_TENANT}`,
-    redirectUri: "/redirect",
-    postLogoutRedirectUri: "/",
+    clientId: getMsalClientId(),
+    authority: `https://login.microsoftonline.com/${getMsalTenant()}`,
+    redirectUri: getMsalRedirectUri(),
+    postLogoutRedirectUri: "/redirect",
   },
   cache: {
     cacheLocation: "sessionStorage",

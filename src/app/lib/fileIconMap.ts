@@ -36,23 +36,23 @@ const FILE_ICON_MAP: Record<FileKind, React.FC<React.SVGProps<SVGSVGElement>>> =
 // ─────────────────────────────────────────────────────────────────────────────
 // Maps every known FileKind to its display color token.
 // These are Tailwind CSS class strings applied to the icon wrapper and icon
-// itself — grey at rest, blue on group hover — matching the org's design spec.
+// itself - grey at rest, blue on group hover - matching the org's design spec.
 // ─────────────────────────────────────────────────────────────────────────────
 const FILE_ICON_COLOR_MAP: Record<FileKind, string> = {
-    audio: "text-zinc-500 group-hover:text-blue-600",
-    compressed: "text-zinc-500 group-hover:text-blue-600",
-    excel: "text-zinc-500 group-hover:text-blue-600",
-    image: "text-zinc-500 group-hover:text-blue-600",
-    pdf: "text-zinc-500 group-hover:text-blue-600",
-    powerpoint: "text-zinc-500 group-hover:text-blue-600",
-    text: "text-zinc-500 group-hover:text-blue-600",
-    word: "text-zinc-500 group-hover:text-blue-600",
-    unknown: "text-zinc-500 group-hover:text-blue-600",
+    audio: "text-zinc-500 group-hover:text-primary",
+    compressed: "text-zinc-500 group-hover:text-primary",
+    excel: "text-zinc-500 group-hover:text-primary",
+    image: "text-zinc-500 group-hover:text-primary",
+    pdf: "text-zinc-500 group-hover:text-primary",
+    powerpoint: "text-zinc-500 group-hover:text-primary",
+    text: "text-zinc-500 group-hover:text-primary",
+    word: "text-zinc-500 group-hover:text-primary",
+    unknown: "text-zinc-500 group-hover:text-primary",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Normalises whatever string Craft CMS returns into a valid FileKind.
-// The GraphQL `kind` field is typed as string on the wire — this is the single
+// The GraphQL `kind` field is typed as string on the wire - this is the single
 // point where we coerce it into our union and fall back safely to "unknown".
 // Every other part of the codebase receives a FileKind, never a raw string.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ export function normaliseFileKind(raw: string): FileKind {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Returns the icon component for a given FileKind.
-// Consumers never import individual icon components — they call this function.
+// Consumers never import individual icon components - they call this function.
 // This is the only place that knows which SVG corresponds to which file type.
 // ─────────────────────────────────────────────────────────────────────────────
 export function getFileIcon(

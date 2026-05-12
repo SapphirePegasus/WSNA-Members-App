@@ -25,6 +25,11 @@ export default function UserMenuPC() {
     };
   }, [isOpen]);
 
+  const handleLogout = async () => {
+    setIsOpen(false);
+    await logout();
+  };
+
   if (!user) return <div className="text-white text-sm">Please Log-In</div>;
 
   return (
@@ -40,7 +45,7 @@ export default function UserMenuPC() {
           </div>
           <div className="px-4 py-3">
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="flex items-center gap-2 text-sm text-red-500 cursor-pointer"
             >
               <SignOutCrossIcon height={18} width={16} />

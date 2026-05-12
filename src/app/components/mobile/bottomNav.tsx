@@ -4,8 +4,8 @@ import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  //HomeIcon,
-  //HomeActiveIcon,
+  HomeIcon,
+  HomeActiveIcon,
   //UnionIcon,
   //UnionActiveIcon,
   GrowthIcon,
@@ -20,8 +20,8 @@ import {
 
 export default function BottomNav({
   hideOnScrollDown = true,
-  unhideOnScrollUp = true,
-  unhideOnScrollStop = false,
+  unhideOnScrollUp = false,
+  unhideOnScrollStop = true,
 }) {
   const [hidden, setHidden] = useState(false);
   const pathname = usePathname();
@@ -32,6 +32,12 @@ export default function BottomNav({
   const scrollStopTimeoutRef = useRef<number | null>(null);
 
   const navItems = [
+    {
+      href: "/home",
+      label: "Home",
+      icon: HomeIcon,
+      activeIcon: HomeActiveIcon,
+    },
     {
       href: "/growth",
       label: "Growth",
@@ -92,7 +98,7 @@ export default function BottomNav({
       className={`
         md:hidden
         fixed bottom-0 left-0 w-full bg-white border-t border-gray-200
-        flex justify-around items-center py-2
+        flex justify-around items-center pt-2 pb-safe
         transition-transform duration-300 ease-in-out
         ${hidden ? "translate-y-full" : "translate-y-0"}
       `}

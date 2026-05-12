@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Supported file kind values as returned by Craft CMS.
 // Using a union type (not a plain string) so every consumer gets compile-time
-// exhaustiveness checking — if Craft adds a new kind, TypeScript will flag it.
+// exhaustiveness checking - if Craft adds a new kind, TypeScript will flag it.
 // ─────────────────────────────────────────────────────────────────────────────
 export type FileKind =
     | "audio"
@@ -22,9 +22,9 @@ export type FileKind =
 export interface FileAsset {
     id: string;
     title: string;
-    subtitle: string | null; // max 75 chars per spec; null when not provided
+    subtitle: string | null; // max 75 chars as per spec; null when not provided
     url: string;
-    size: number; // raw bytes — formatted in the UI layer, never here
+    size: number; // raw bytes - formatted in the UI layer, never here
     kind: FileKind;
 }
 
@@ -41,14 +41,14 @@ export interface RawTopicEntry {
     lft: number;
     rgt: number;
     parent: { id: string } | null;
-    description: string | null; // max 400 chars per spec; null when not set
+    description: string | null; // max 400 chars as per spec; null when not set
     files: FileAsset[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A topic node after the flat list has been processed into a tree.
 // `children` holds nested subtopics at the next level down.
-// This is the shape every UI component works with — never the raw flat entry.
+// This is the shape every UI component works with - never the raw flat entry.
 // ─────────────────────────────────────────────────────────────────────────────
 export interface TopicNode {
     id: string;
@@ -71,7 +71,7 @@ export interface ResourcesApiResponse {
 // ─────────────────────────────────────────────────────────────────────────────
 // The Craft CMS section identifier passed as a query-string param to the API
 // route, and as a prop to the Resources component.
-// Typing it as a string (not a union) keeps it open-ended — new sections can
+// Typing it as a string (not a union) keeps it open-ended - new sections can
 // be added in Craft without touching this file.
 // ─────────────────────────────────────────────────────────────────────────────
 export type ResourceSection = string; // e.g. "appResourceTopics_Growth"

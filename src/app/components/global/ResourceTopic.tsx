@@ -7,9 +7,9 @@ import type { TopicNode } from "@/app/types/resources";
 // ─────────────────────────────────────────────────────────────────────────────
 // TOPIC HEADING STYLES
 // Each level has distinct typography per the design shown in Image 1:
-//   Level 1 — large bold heading, clear section break
-//   Level 2 — medium bold heading, subordinate to level 1
-//   Level 3 — small uppercase label, tertiary grouping
+//   Level 1 - large bold heading, clear section break
+//   Level 2 - medium bold heading, subordinate to level 1
+//   Level 3 - small uppercase label, tertiary grouping
 //
 // Defined as a lookup rather than conditional chains so adding a level 4
 // (if Craft ever introduces deeper nesting) is a one-line change here.
@@ -26,7 +26,7 @@ const TOPIC_DESCRIPTION_STYLES: Record<number, string> = {
     3: "text-xs text-gray-500 mt-1",
 };
 
-// Vertical spacing above each topic level — level 1 gets the most breathing
+// Vertical spacing above each topic level - level 1 gets the most breathing
 // room as a primary section break, level 2 and 3 progressively less.
 const TOPIC_SPACING_STYLES: Record<number, string> = {
     1: "mt-6 first:mt-0",
@@ -51,7 +51,7 @@ interface ResourceTopicProps {
 // per the spec. Even if that changes, React's call stack limit is not a
 // practical concern at these depths.
 //
-// The component does not filter children itself — filtering was done once
+// The component does not filter children itself - filtering was done once
 // in buildTopicTree (topicHasVisibleContent). Every TopicNode that reaches
 // this component is guaranteed to have displayable content.
 // ─────────────────────────────────────────────────────────────────────────────

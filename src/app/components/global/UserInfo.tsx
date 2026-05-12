@@ -67,7 +67,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         });
 
         try {
-            // Silently acquire the ID token — no popup, uses cached token
+            // Silently acquire the ID token - no popup, uses cached token
             const tokenResponse = await instance.acquireTokenSilent({
                 ...loginRequest,
                 account,
@@ -79,7 +79,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 throw new Error("No ID token returned from acquireTokenSilent");
             }
 
-            // Send verified token to API — email is extracted server-side from claims
+            // Send verified token to API - email is extracted server-side from claims
             const res = await fetch("/api/contact", {
                 method: "POST",
                 headers: {
@@ -89,7 +89,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             });
 
             /*if (res.status === 401) {
-                // Token was rejected server-side — treat as signed out
+                // Token was rejected server-side - treat as signed out
                 await instance.logoutPopup({ account });
                 setUser(null);
                 setContact(null);
@@ -98,7 +98,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             }*/
 
             if (res.status === 401) {
-                // Token was rejected server-side — clear state only, no logoutPopup
+                // Token was rejected server-side - clear state only, no logoutPopup
                 // logoutPopup here would open a second unwanted popup
                 setUser(null);
                 setContact(null);
@@ -118,15 +118,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
                 // Redirect to stored path or fallback to /membership
                 const redirectTo =
-                    sessionStorage.getItem("redirectAfterLogin") ?? "/membership";
+                    sessionStorage.getItem("redirectAfterLogin") ?? "/home";
                 sessionStorage.removeItem("redirectAfterLogin");
                 router.replace(redirectTo);
             } else {
-                // Valid MS account but not in Dataverse — reject and clean up
-                // Use logoutRedirect with no popup to silently clear the MSAL session
+                // Valid MS account but not in Dataverse - reject and clean up
+                // Silently clear the MSAL session
                 setContact(null);
                 setStatus("not-registered");
                 await instance.clearCache();
+                instance.setActiveAccount(null);
                 router.replace("/not-a-member");
             }
         } catch (err) {
@@ -161,7 +162,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         try {
             const account = accounts[0];
             if (account) {
-                await instance.logoutPopup({ account });
+                await instance.logoutPopup({ account, postLogoutRedirectUri: "/redirect" });
             }
         } catch (err) {
             console.error("[UserProvider] Logout failed:", err);

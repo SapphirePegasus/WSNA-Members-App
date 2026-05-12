@@ -1,5 +1,5 @@
 export default function Support() {
   return (
-    <div>support</div>
+    <div>SUPPORT UNDER DEVELOPMENT</div>
   );
 }

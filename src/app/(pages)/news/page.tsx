@@ -1,5 +1,5 @@
 export default function News() {
   return (
-    <div>news</div>
+    <div>NEWS UNDER DEVELOPMENT</div>
   );
 }

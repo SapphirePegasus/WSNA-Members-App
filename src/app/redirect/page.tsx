@@ -5,9 +5,21 @@ import { broadcastResponseToMainFrame } from "@azure/msal-browser/redirect-bridg
 
 export default function RedirectPage() {
     useEffect(() => {
-        broadcastResponseToMainFrame().catch((error: Error) => {
-            console.error("[MSAL Redirect Bridge] Error:", error);
-        });
+        broadcastResponseToMainFrame()
+            .catch((error: Error & { errorCode?: string }) => {
+                if (
+                    error?.errorCode === "empty_response" ||
+                    error?.message?.includes("empty_response")
+                ) {
+                    return;
+                }
+                console.error("[MSAL Redirect Bridge] Error:", error);
+            })
+            .finally(() => {
+                if (window.opener) {
+                    window.close();
+                }
+            });
     }, []);
 
     return (
@@ -23,7 +35,6 @@ export default function RedirectPage() {
                 gap: "16px",
             }}
         >
-            {/* WSNA brand color spinner — matches --primary: #0057b8 from globals.css */}
             <div
                 style={{
                     width: "36px",
@@ -35,10 +46,10 @@ export default function RedirectPage() {
                 }}
             />
             <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
             <p
                 style={{
                     fontFamily: "Arial, sans-serif",
@@ -47,25 +58,8 @@ export default function RedirectPage() {
                     margin: 0,
                 }}
             >
-                Signing you in...
+                Please Wait...
             </p>
         </div>
     );
 }
-
-
-
-/*"use client";
-
-import { useEffect } from "react";
-import { broadcastResponseToMainFrame } from "@azure/msal-browser/redirect-bridge";
-
-export default function RedirectPage() {
-    useEffect(() => {
-        broadcastResponseToMainFrame().catch((error: Error) => {
-            console.error("[MSAL Redirect Bridge] Error:", error);
-        });
-    }, []);
-
-    return <p>Processing authentication...</p>;
-}*/

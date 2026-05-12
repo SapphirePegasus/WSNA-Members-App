@@ -50,7 +50,7 @@ export const NewsActiveIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 export const MembershipCardIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
-    viewBox="0 0 25 19"
+    viewBox="0 0 24 18"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     {...props}
@@ -467,6 +467,44 @@ export const FileArchiveIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <path
       fill="currentColor"
       d="M128 96v32h32V96zm65.9 169.6c-1.1-5.6-6-9.6-11.8-9.6H160v-32h-32v32l-19.4 97.2c-6.5 32.5 18.3 62.8 51.4 62.8s57.9-30.3 51.4-62.8zm-33.6 124.5c-17.9 0-32.4-12.1-32.4-27s14.5-27 32.4-27 32.4 12.1 32.4 27-14.5 27-32.4 27zM128 160v32h32v-32zm64-96h-32v32h32zm177.9 33.9L286 14C277 5 264.8-.1 252.1-.1H48C21.5 0 0 21.5 0 48v416c0 26.5 21.5 48 48 48h288c26.5 0 48-21.5 48-48V131.9c0-12.7-5.1-25-14.1-34zM256 32.5c2.8.7 5.4 2.1 7.4 4.2l83.9 83.9c2 2 3.5 4.6 4.2 7.4H256zM352 464c0 8.8-7.2 16-16 16H48c-8.8 0-16-7.2-16-16V48c0-8.8 7.2-16 16-16h79.7v32h32V32H224v104c0 13.3 10.7 24 24 24h104zM192 192h-32v32h32zm0-64h-32v32h32z"
+    />
+  </svg>
+);
+
+export const FileOutlineIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 17 21"
+    width="17"
+    height="21"
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    {...props}
+  >
+    <path
+      d="M15.75 12.75V10.125C15.75 9.22989 15.3944 8.37145 14.7615 7.73851C14.1286 7.10558 13.2701 6.75 12.375 6.75H10.875C10.5766 6.75 10.2905 6.63147 10.0795 6.4205C9.86853 6.20952 9.75 5.92337 9.75 5.625V4.125C9.75 3.22989 9.39442 2.37145 8.76149 1.73851C8.12855 1.10558 7.27011 0.75 6.375 0.75H4.5M6.75 0.75H1.875C1.254 0.75 0.75 1.254 0.75 1.875V19.125C0.75 19.746 1.254 20.25 1.875 20.25H14.625C15.246 20.25 15.75 19.746 15.75 19.125V9.75C15.75 7.36305 14.8018 5.07387 13.114 3.38604C11.4261 1.69821 9.13695 0.75 6.75 0.75Z"
+      stroke="#18181B"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+export const BookOpenIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 20 19"
+    width="20"
+    height="19"
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    {...props}
+  >
+    <path
+      d="M9.75 3.04201C8.10161 1.56337 5.9644 0.746952 3.75 0.750009C2.698 0.750009 1.688 0.930009 0.75 1.26201V15.512C1.71362 15.172 2.72816 14.9989 3.75 15C6.055 15 8.158 15.867 9.75 17.292M9.75 3.04201C11.3983 1.56328 13.5356 0.746857 15.75 0.750009C16.802 0.750009 17.812 0.930009 18.75 1.26201V15.512C17.7864 15.172 16.7718 14.9989 15.75 15C13.5356 14.997 11.3984 15.8134 9.75 17.292M9.75 3.04201V17.292"
+      stroke="#18181B"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     />
   </svg>
 );

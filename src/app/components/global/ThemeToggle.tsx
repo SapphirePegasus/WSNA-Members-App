@@ -1,3 +1,7 @@
+// This code is never actually used in the app but the system
+// architecture is still present and can be used any time in
+// future if the app has light/dark mode themes.
+
 "use client";
 
 import { useEffect, useState } from "react";

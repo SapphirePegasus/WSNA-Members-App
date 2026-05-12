@@ -1,17 +1,16 @@
+// CHECK LINE 151 LATER
+
 import { NextRequest, NextResponse } from "next/server";
 import { normaliseFileKind } from "@/app/lib/fileIconMap";
 import type { RawTopicEntry, ResourcesApiResponse } from "@/app/types/resources";
+import { verifyAuth, VerifyAuthError } from "@/app/lib/verifyAuth";
+import { validateSectionParam } from "@/app/lib/validate";
+import { getCraftToken, getWsnaApiBase } from "@/app/lib/env";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTS
-// ─────────────────────────────────────────────────────────────────────────────
-const GRAPHQL_URL = process.env.NEXT_PUBLIC_WSNA_API_BASE!;
-const TOKEN = process.env.CRAFT_GRAPHQL_TOKEN!;
+//const GRAPHQL_URL = process.env.NEXT_PUBLIC_WSNA_API_BASE!;
+//const TOKEN = process.env.CRAFT_GRAPHQL_TOKEN!;
 
-// How long the browser and CDN may cache this response.
-// Resources change infrequently — 5 minutes is a safe starting point.
-// The org can tune this without a code change via the env var pattern below
-// if needed in future. For now it is a constant.
+// The browser and CDN may cache this response for 5 minutes.
 const CACHE_MAX_AGE_SECONDS = 300;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,21 +50,21 @@ const RESOURCES_QUERY = `
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GRAPHQL FETCHER
-// Thin wrapper around fetch — keeps the route handler readable.
+// Thin wrapper around fetch - keeps the route handler readable.
 // Throws on non-2xx so the caller can catch and return a 500.
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchResourceTopics(section: string): Promise<RawTopicEntry[]> {
-  const response = await fetch(GRAPHQL_URL, {
+  const response = await fetch(getWsnaApiBase(), {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${getCraftToken()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       query: RESOURCES_QUERY,
       variables: { section: [section] },
     }),
-    // Next.js fetch cache — revalidates server-side every CACHE_MAX_AGE_SECONDS.
+    // Next.js fetch cache - revalidates server-side every CACHE_MAX_AGE_SECONDS.
     // This is separate from the HTTP Cache-Control header sent to the client.
     next: { revalidate: CACHE_MAX_AGE_SECONDS },
   });
@@ -79,7 +78,7 @@ async function fetchResourceTopics(section: string): Promise<RawTopicEntry[]> {
   const json = await response.json();
 
   if (json.errors?.length) {
-    // GraphQL can return HTTP 200 with errors in the body — check explicitly.
+    // GraphQL can return HTTP 200 with errors in the body - check explicitly.
     const messages = json.errors
       .map((e: { message: string }) => e.message)
       .join("; ");
@@ -92,7 +91,7 @@ async function fetchResourceTopics(section: string): Promise<RawTopicEntry[]> {
   // NORMALISATION
   // This is the only place in the codebase where raw GraphQL data is touched.
   // We coerce `kind` from a plain string to a FileKind here so every consumer
-  // downstream works with typed, validated data — never raw wire format.
+  // downstream works with typed, validated data - never raw wire format.
   // Null-coerce subtitle so components never receive undefined.
   // ───────────────────────────────────────────────────────────────────────────
   return (rawEntries as Record<string, unknown>[]).map((entry) => {
@@ -124,19 +123,29 @@ async function fetchResourceTopics(section: string): Promise<RawTopicEntry[]> {
 // GET /api/resources?section=appResourceTopics_Growth
 //
 // Query params:
-//   section (required) — the Craft CMS section handle to query.
+//   section (required) - the Craft CMS section handle to query.
 //
 // Responses:
-//   200 — ResourcesApiResponse JSON with cache headers
-//   400 — missing or invalid section param
-//   500 — upstream Craft CMS error
+//   200 - ResourcesApiResponse JSON with cache headers
+//   400 - missing or invalid section param
+//   500 - upstream Craft CMS error
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  // ── Auth guard ────────────────────────────────────────────────────────────
+  try {
+    await verifyAuth(request);
+  } catch (err) {
+    if (err instanceof VerifyAuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
+  }
+
   const { searchParams } = request.nextUrl;
   const section = searchParams.get("section")?.trim();
 
-  // Validate the section param — never send an empty string to Craft CMS.
-  if (!section) {
+  // Validate the section param - never send an empty string to Craft CMS.
+  /*if (!section) {
     return NextResponse.json(
       { error: "Missing required query parameter: section" },
       { status: 400 }
@@ -151,10 +160,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { error: "Invalid section parameter format" },
       { status: 400 }
     );
-  }
+  }*/
+
+  const sectionResult = validateSectionParam(section);
+  if (sectionResult.error) return sectionResult.error;
+
+  const validatedSection = sectionResult.data;
 
   try {
-    const topics = await fetchResourceTopics(section);
+    const topics = await fetchResourceTopics(validatedSection);
 
     const body: ResourcesApiResponse = { topics };
 

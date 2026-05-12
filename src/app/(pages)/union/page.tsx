@@ -1,5 +1,5 @@
 export default function Union() {
   return (
-    <div>union</div>
+    <div>UNION UNDER DEVELOPMENT</div>
   );
 }

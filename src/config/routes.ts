@@ -6,6 +6,7 @@ export type RouteConfig = {
 
 export const routes: RouteConfig[] = [
     { path: "/", protected: false, indexed: true },
+    { path: "/home", protected: true, indexed: false },
     { path: "/membership", protected: true, indexed: false },
     { path: "/growth", protected: true, indexed: false },
     { path: "/not-a-member", protected: false, indexed: false },

@@ -7,10 +7,11 @@ import type {
     ResourceSection,
     ResourcesApiResponse,
 } from "@/app/types/resources";
+import { getIdToken } from "@/app/lib/getIdToken";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODULE-LEVEL CACHE
-// Lives outside React — survives component unmounts, tab switches, and
+// Lives outside React - survives component unmounts, tab switches, and
 // re-renders. Keyed by section string so Growth and Membership (or any future
 // section) each maintain their own independent cache entry.
 //
@@ -28,7 +29,7 @@ const topicTreeCache = new Map<ResourceSection, TopicNode[]>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOOK STATE SHAPE
-// Three mutually exclusive states — loading, error, and success.
+// Three mutually exclusive states - loading, error, and success.
 // `data` is null until a successful fetch completes.
 // `error` is null unless the fetch fails.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ export function useResources(section: ResourceSection): UseResourcesState {
     // ───────────────────────────────────────────────────────────────────────────
     // Initialise state from cache synchronously if available.
     // This means on a tab switch back to a previously loaded section, the
-    // component renders with data immediately — no loading flash, no spinner.
+    // component renders with data immediately - no loading flash, no spinner.
     // ───────────────────────────────────────────────────────────────────────────
     const [state, setState] = useState<UseResourcesState>(() => {
         const cached = topicTreeCache.get(section);
@@ -65,7 +66,7 @@ export function useResources(section: ResourceSection): UseResourcesState {
 
     useEffect(() => {
         // If already in cache (set before this effect runs or on a re-render),
-        // update state from cache and bail — no fetch needed.
+        // update state from cache and bail - no fetch needed.
         const cached = topicTreeCache.get(section);
         if (cached) {
             setState({ data: cached, loading: false, error: null });
@@ -83,10 +84,32 @@ export function useResources(section: ResourceSection): UseResourcesState {
 
         async function fetchAndCache(): Promise<void> {
             try {
+                const idToken = await getIdToken();
+                if (!idToken) {
+                    setState({
+                        data: null,
+                        loading: false,
+                        error: "Session expired. Please sign in again.",
+                    });
+                    return;
+                }
+
                 const response = await fetch(
                     `/api/resources?section=${encodeURIComponent(section)}`,
-                    { signal: controller.signal }
+                    {
+                        signal: controller.signal,
+                        headers: {
+                            Authorization: `Bearer ${idToken}`,
+                        },
+                    }
                 );
+
+                if (response.status === 429) {
+                    const retryAfter = response.headers.get("Retry-After") ?? "60";
+                    throw new Error(
+                        `Too many requests. Please wait ${retryAfter} seconds before trying again.`
+                    );
+                }
 
                 if (!response.ok) {
                     const body = await response.json().catch(() => ({}));
@@ -97,7 +120,7 @@ export function useResources(section: ResourceSection): UseResourcesState {
 
                 const body: ResourcesApiResponse = await response.json();
 
-                // Build the tree once — this is the only call to buildTopicTree
+                // Build the tree once - this is the only call to buildTopicTree
                 // for this section for the entire browser session.
                 const tree = buildTopicTree(body.topics);
 
@@ -111,7 +134,7 @@ export function useResources(section: ResourceSection): UseResourcesState {
             } catch (err) {
                 if (cancelled) return;
 
-                // AbortError is not a real error — it means we intentionally cancelled.
+                // AbortError is not a real error - it means we intentionally cancelled.
                 if (err instanceof DOMException && err.name === "AbortError") return;
 
                 console.error(`[useResources] Failed to load section "${section}":`, err);
@@ -129,7 +152,7 @@ export function useResources(section: ResourceSection): UseResourcesState {
 
         fetchAndCache();
 
-        // Cleanup — abort the fetch and mark as cancelled so stale setState
+        // Cleanup - abort the fetch and mark as cancelled so stale setState
         // calls after unmount or section change are silently dropped.
         return () => {
             cancelled = true;

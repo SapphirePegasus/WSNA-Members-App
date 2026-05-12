@@ -8,7 +8,7 @@ import React from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MEMBERSHIP CARD SECTION
-// Pure presentational — renders the physical card from contact data.
+// Pure presentational - renders the physical card from contact data.
 // contact typed as any to preserve access to OData annotation fields
 // (e.g. _wsna_membertype_value@OData.Community.Display.V1.FormattedValue)
 // until those fields are formally added to ContactRecord.
@@ -34,7 +34,7 @@ function MembershipCardSection({ contact }: { contact: any }) {
                 .join(", ")}
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              WSNA member since{" "}
+              WSNA Member Since{" "}
               {contact?.wsna_datejoined &&
                 new Intl.DateTimeFormat("en", { year: "numeric" }).format(
                   new Date(contact.wsna_datejoined)
@@ -53,33 +53,37 @@ function MembershipCardSection({ contact }: { contact: any }) {
                 <p className="text-base md:text-lg tracking-wide font-medium">
                   {contact?.employeeid?.toString().replace(/,/g, "") || "NOT FOUND"}
                 </p>
-                <p className="text-xs md:text-sm text-gray-500">WSNA member number</p>
+                <p className="text-xs md:text-sm text-gray-500">WSNA Member ID</p>
               </div>
             </div>
 
-            <div className="flex items-start gap-2">
-              <span className="w-6 h-6 mb-1 mx-1 shrink-0">
-                <MembershipCardIconPLACEHOLDER />
-              </span>
-              <div>
-                <p className="text-base md:text-lg tracking-wide font-medium">
-                  {contact?.department?.toString().replace(/,/g, "") || "NOT FOUND"}
-                </p>
-                <p className="text-xs md:text-sm text-gray-500">ANA member number</p>
+            {contact?.department && (
+              <div className="flex items-start gap-2">
+                <span className="w-6 h-6 mb-1 mx-1 shrink-0">
+                  <MembershipCardIconPLACEHOLDER />
+                </span>
+                <div>
+                  <p className="text-base md:text-lg tracking-wide font-medium">
+                    {contact.department.toString().replace(/,/g, "")}
+                  </p>
+                  <p className="text-xs md:text-sm text-gray-500">ANA Member ID</p>
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="flex items-start gap-2">
-              <span className="w-6 h-6 mb-1 mx-1 shrink-0">
-                <MembershipCardIconPLACEHOLDER />
-              </span>
-              <div>
-                <p className="text-base md:text-lg tracking-wide font-medium">
-                  {contact?.wsna_aftid?.toString().replace(/,/g, "") || "NOT FOUND"}
-                </p>
-                <p className="text-xs md:text-sm text-gray-500">AFT member number</p>
+            {contact?.wsna_aftid && (
+              <div className="flex items-start gap-2">
+                <span className="w-6 h-6 mb-1 mx-1 shrink-0">
+                  <MembershipCardIconPLACEHOLDER />
+                </span>
+                <div>
+                  <p className="text-base md:text-lg tracking-wide font-medium">
+                    {contact.wsna_aftid.toString().replace(/,/g, "")}
+                  </p>
+                  <p className="text-xs md:text-sm text-gray-500">AFT Member ID</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -124,7 +128,7 @@ function LinkRow({ link, subtitle, isInternal = false }: {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LINKS SECTION
-// Pure presentational — receives resolved data, renders each link group.
+// Pure presentational - receives resolved data, renders each link group.
 // Order matches spec exactly: local units, regional, national nurses,
 // national union. WSNA benefits intentionally absent pending spec (Section 3).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,7 +157,7 @@ function LinksSection({ links }: { links: MembershipLinksResponse }) {
           <LinkRow link={links.nationalNurses} subtitle="Premier Member Benefits" />
         )}
 
-        {/* 5. National Union — union members only, filtered server-side */}
+        {/* 5. National Union - union members only, filtered server-side */}
         {links.nationalUnion && (
           <LinkRow link={links.nationalUnion} subtitle="Member Discounts" />
         )}

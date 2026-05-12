@@ -1,11 +1,26 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useUser } from "@/app/components/global/UserInfo";
 import { WsnaFullNameBlue } from "@/app/utils/icons";
 
 export default function LoginButton() {
-  const { user, contact, status, login, logout } = useUser();
+  const { user, status, login, logout } = useUser();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleLogin = async () => {
+    setIsLoading(true);
+    try {
+      await login();
+    } catch {
+      // login() handles its own errors internally in UserInfo.tsx
+      // If it throws unexpectedly, re-enable the button so user can retry
+      setIsLoading(false);
+    }
+  };
+
+  // Determine if auth is in-flight after the popup resolved
+  const isAuthInProgress = isLoading || status === "loading";
 
   return (
     <div
@@ -18,12 +33,11 @@ export default function LoginButton() {
         flex
         flex-col
         fixed
-        inset-0 
-        z-50 
+        inset-0
+        z-50
         overflow-hidden
       "
     >
-      {/* PLEASE REMOVE FIXED, INSET, Z, OVERFLOW FROM ABOVE WHEN THERE IS DEDICATED /LOGIN PAGE */}
       {/* Logo */}
       <div className="m-8 flex justify-center md:justify-start">
         <WsnaFullNameBlue className="h-6 w-auto" />
@@ -36,54 +50,58 @@ export default function LoginButton() {
             <h1 className="text-4xl font-bold text-[#0a2a4a] mb-2">
               My WSNA
             </h1>
-
             <p className="text-sm text-[#1f3c5b] mb-6">
-              Sign in with your account that is registered with WSNA
+              Sign in with your WSNA account
             </p>
-
             <button
-              onClick={login}
-              className="px-5 py-2 rounded-full bg-primary text-white text-sm font-medium hover:opacity-90 transition"
+              onClick={handleLogin}
+              disabled={isAuthInProgress}
+              className="
+                inline-flex items-center justify-center gap-2
+                px-5 py-2 rounded-full
+                bg-primary text-white text-sm font-medium
+                hover:opacity-90 transition
+                disabled:opacity-70 disabled:cursor-not-allowed
+              "
             >
-              Sign in
+              {isAuthInProgress ? (
+                <>
+                  <span
+                    className="
+                      w-4 h-4 rounded-full
+                      border-2 border-white/30 border-t-white
+                      animate-spin
+                    "
+                  />
+                  Please Wait...
+                </>
+              ) : (
+                "Sign in"
+              )}
             </button>
           </div>
         ) : (
+          // User is signed in but auth/membership check is still resolving
+          // Show minimal state - no debug text
           <div className="text-center space-y-3">
-            <h1 className="text-2xl font-semibold text-[#0a2a4a]">
+            <h1 className="text-4xl font-bold text-[#0a2a4a] mb-2">
               Welcome
             </h1>
-
-            <div className="text-sm text-gray-700 space-y-1">
+            <div className="text-sm sm:text-base md:text-lg text-gray-700 space-y-1">
               <p className="font-medium">{user.name}</p>
-              <p>{user.email}</p>
-              {/*<p>WSNA ID: {contact?.employeeid}</p>
-              <p>AFT ID: {contact?.wsna_aftid}</p>
-              <p>ANA ID: {contact?.department}</p>*/}
-
-              {status === "loading" && (
-                <p className="text-gray-500 text-xs">
-                  Checking membership...
-                </p>
-              )}
-              {status === "not-registered" && (
-                <p className="text-red-500 text-xs">
-                  Not registered in WSNA database
-                </p>
-              )}
-              {status === "registered" && (
-                <p className="text-green-600 text-xs">
-                  Registered in WSNA
-                </p>
-              )}
             </div>
-
-            <button
-              onClick={logout}
-              className="mt-4 px-5 py-2 rounded-full bg-primary text-white text-sm font-medium hover:opacity-90 transition"
-            >
-              Sign out
-            </button>
+            {isAuthInProgress && (
+              <div className="flex justify-center pt-2">
+                <span
+                  className="
+                    w-5 h-5 rounded-full
+                    border-2 border-primary/30 border-t-primary
+                    animate-spin
+                  "
+                />
+                &nbsp; Please Wait...
+              </div>
+            )}
           </div>
         )}
       </div>

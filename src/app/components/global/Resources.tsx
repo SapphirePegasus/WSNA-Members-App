@@ -7,7 +7,7 @@ import type { ResourceSection } from "@/app/types/resources";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROPS
-// `section` is the only required prop — the Craft CMS section handle.
+// `section` is the only required prop - the Craft CMS section handle.
 // This is what makes the component reusable across any page or tab:
 //
 //   Growth resources tab:
@@ -19,7 +19,7 @@ import type { ResourceSection } from "@/app/types/resources";
 //   Any future section:
 //     <Resources section="appResourceTopics_Whatever" />
 //
-// No other configuration is needed — the component handles fetching,
+// No other configuration is needed - the component handles fetching,
 // caching, loading state, error state, and empty state internally.
 // ─────────────────────────────────────────────────────────────────────────────
 interface ResourcesProps {
@@ -28,9 +28,6 @@ interface ResourcesProps {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOADING SKELETON
-// Shown while the first fetch is in progress.
-// Uses pulse animation on grey placeholder blocks to communicate that content
-// is loading without a spinner, matching modern UI patterns.
 // Renders two topic-shaped skeletons to approximate the expected layout.
 // Extracted as a named component (not inline JSX) so the main component body
 // stays readable and the skeleton can be adjusted independently.
@@ -60,7 +57,6 @@ function ResourcesSkeleton() {
 // ERROR STATE
 // Shown when the API fetch fails. Displays the error message from the hook
 // which originates from the API route's structured error response.
-// Keeps the message user-friendly — the full error is logged server-side.
 // ─────────────────────────────────────────────────────────────────────────────
 function ResourcesError({ message }: { message: string }) {
     return (
@@ -75,7 +71,6 @@ function ResourcesError({ message }: { message: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // EMPTY STATE
 // Shown when the fetch succeeds but the section has no publishable topics.
-// This can legitimately happen if all topics in the CMS have no files attached.
 // ─────────────────────────────────────────────────────────────────────────────
 function ResourcesEmpty() {
     return (
@@ -89,10 +84,10 @@ function ResourcesEmpty() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RESOURCES
-// Top-level component. Orchestrates the three possible states (loading, error,
+// Top-level component. Has the three possible states (loading, error,
 // success) and renders the topic tree when data is available.
 //
-// This component owns no business logic — all data work happens in useResources,
+// This component owns no business logic - all data work happens in useResources,
 // buildTopicTree, and the API route. This component just connects them to the UI.
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Resources({ section }: ResourcesProps) {

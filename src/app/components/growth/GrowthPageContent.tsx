@@ -23,7 +23,7 @@ export default function GrowthPageContent() {
 
     return (
         <div>
-            <div className="px-4 pt-2 flex gap-6 text-sm font-medium overflow-x-auto scrollbar-hidden whitespace-nowrap">
+            <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-2 flex gap-6 text-sm font-medium overflow-x-auto scrollbar-hidden whitespace-nowrap">
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}

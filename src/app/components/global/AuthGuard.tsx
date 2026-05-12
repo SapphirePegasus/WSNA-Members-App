@@ -14,17 +14,17 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const pathname = usePathname();
 
     useEffect(() => {
-        // Still initializing or checking Dataverse — do nothing yet
+        // Still initializing or checking Dataverse - do nothing yet
         if (status === "initializing" || status === "loading") return;
 
-        // Not authenticated or not a member — store intended path and redirect home
+        // Not authenticated or not a member - store intended path and redirect home
         if (status === "signed-out" || status === "not-registered") {
             sessionStorage.setItem("redirectAfterLogin", pathname);
             router.replace("/");
         }
     }, [status, pathname, router]);
 
-    // While initializing or loading show nothing — no flash, no redirect yet
+    // While initializing or loading show nothing - no flash, no redirect yet
     if (status === "initializing" || status === "loading") {
         return (
             <div className="w-full h-screen flex items-center justify-center">
@@ -33,11 +33,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         );
     }
 
-    // Not registered or signed out — render nothing while redirect is in flight
+    // Not registered or signed out - render nothing while redirect is in flight
     if (status === "signed-out" || status === "not-registered") {
         return null;
     }
 
-    // Registered — render the protected page
+    // Registered - render the protected page
     return <>{children}</>;
 }

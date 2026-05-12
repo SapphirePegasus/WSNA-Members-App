@@ -18,8 +18,7 @@ const CONTACT_SELECT = [
     "wsna_showaft",      // union member flag
     "wsna_credentials",  // credentials suffix (e.g. RN, MN)
     "wsna_datejoined",   // member since date
-    // ── ADD NEW CONTACT FIELDS HERE ──────────────────────────────────────────
-    // Example: "wsna_somenewfield",
+    // ── ADD NEW CONTACT FIELDS BELOW ─────────────────────────────────────────
 ].join(",");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,13 +32,12 @@ const CONTACT_SELECT = [
 // to ContactRecord below.
 // ─────────────────────────────────────────────────────────────────────────────
 const CONTACT_EXPAND = [
-    // Primary facility — polymorphic lookup, _account suffix required
+    // Primary facility - polymorphic lookup, _account suffix required
     "parentcustomerid_account($select=accountnumber,name,wsna_accounttype)",
-    // District — standard lookup to wsna_district table
+    // District - standard lookup to wsna_district table
     // wsna_name holds the short code (e.g. "NW"), not the long name
     "wsna_district($select=wsna_name)",
-    // ── ADD NEW EXPANDS HERE ─────────────────────────────────────────────────
-    // Example: "wsna_somerelatedtable($select=fieldname)",
+    // ── ADD NEW EXPANDS BELOW ────────────────────────────────────────────────
 ].join(",");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +51,7 @@ const FACILITY_ACCOUNT_TYPE = 551050000;
 // ─────────────────────────────────────────────────────────────────────────────
 // ContactRecord
 // The typed shape of a contact as used throughout the application.
-// All related entity data is resolved into flat, typed fields here —
+// All related entity data is resolved into flat, typed fields here -
 // no raw OData annotations or lookup IDs leak beyond this file.
 //
 // To add a new field: add it here AND add it to CONTACT_SELECT or
@@ -91,7 +89,7 @@ export interface ContactRecord {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RAW DATAVERSE SHAPE
-// Internal type only — never exported. Represents the raw OData response
+// Internal type only - never exported. Represents the raw OData response
 // before we normalize it into ContactRecord. Keeps the normalization logic
 // explicit and prevents raw Dataverse shapes from leaking into the rest of
 // the application.
@@ -106,7 +104,7 @@ interface RawContactDataverse {
     wsna_showaft: boolean | null;
     wsna_credentials: string | null;
     wsna_datejoined: string | null;
-    // Expanded account — null if parentcustomerid is not an account
+    // Expanded account - null if parentcustomerid is not an account
     parentcustomerid_account: {
         accountnumber: string | null;
         name: string | null;
@@ -158,7 +156,7 @@ function normalizeContact(raw: RawContactDataverse): ContactRecord {
 // Fetches a single contact by email address with all required fields and
 // related entity data resolved in one Dataverse call.
 // Returns null if no matching contact is found.
-// Throws on Dataverse API errors — the caller is responsible for catching.
+// Throws on Dataverse API errors - the caller is responsible for catching.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function getContactByEmail(
     email: string
@@ -166,7 +164,7 @@ export async function getContactByEmail(
     const normalizedEmail = email.trim().toLowerCase();
     const encodedEmail = encodeURIComponent(normalizedEmail);
 
-    // Build expand string manually — do NOT use encodeURIComponent on the
+    // Build expand string manually - do NOT use encodeURIComponent on the
     // full expand string. Parentheses and $select inside expand must remain
     // unencoded for Dataverse OData to parse them correctly.
     const select = CONTACT_SELECT;
