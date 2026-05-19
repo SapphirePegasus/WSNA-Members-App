@@ -10,12 +10,23 @@ export default function LoginButton() {
 
   const handleLogin = async () => {
     setIsLoading(true);
+    const handleWindowFocus = () => {
+      // Give MSAL 500ms to resolve/reject after the popup closes
+      setTimeout(() => {
+        setIsLoading((current) => {
+          return current ? false : current;
+        });
+      }, 500);
+    };
+
+    window.addEventListener("focus", handleWindowFocus, { once: true });
+
     try {
       await login();
     } catch {
-      // login() handles its own errors internally in UserInfo.tsx
-      // If it throws unexpectedly, re-enable the button so user can retry
       setIsLoading(false);
+    } finally {
+      window.removeEventListener("focus", handleWindowFocus);
     }
   };
 

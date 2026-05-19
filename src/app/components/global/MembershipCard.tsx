@@ -46,7 +46,7 @@ function MembershipCardSection({ contact }: { contact: any }) {
 
           <div className="space-y-3 md:space-y-4">
             <div className="flex items-start gap-2">
-              <span className="w-6 h-6 mb-1 mx-1 shrink-0">
+              <span className="w-6 h-6 pt-1 mb-1 mx-1 shrink-0">
                 <MembershipCardIcon />
               </span>
               <div>

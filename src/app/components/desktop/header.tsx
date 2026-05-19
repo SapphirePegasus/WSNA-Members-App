@@ -26,7 +26,7 @@ export default function HeaderPC() {
               <Link
                 key={label}
                 href={href}
-                className={`text-white text-base ${isActive ? "font-bold" : "font-medium"}`}
+                className={`text-base ${isActive ? "text-white font-bold" : "text-blue-200 font-medium"}`}
               >
                 {label}
               </Link>

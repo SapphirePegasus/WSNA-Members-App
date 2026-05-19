@@ -59,8 +59,8 @@ export default function MembershipPageContent() {
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`py-2 cursor-pointer text-base ${activeTab === tab.id
-                            ? "border-b-3 border-black text-foreground font-semibold"    //active
-                            : "border-b-3 border-transparent text-gray-500 font-semibold"  //inactive
+                            ? "border-b-4 border-gray-300 text-foreground font-semibold"    //active
+                            : "border-b-4 border-transparent text-gray-500 hover:text-gray-600 font-semibold"  //inactive
                             }`}
                     >
                         {tab.label}

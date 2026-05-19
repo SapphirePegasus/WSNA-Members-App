@@ -88,15 +88,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 },
             });
 
-            /*if (res.status === 401) {
-                // Token was rejected server-side - treat as signed out
-                await instance.logoutPopup({ account });
-                setUser(null);
-                setContact(null);
-                setStatus("signed-out");
-                return;
-            }*/
-
             if (res.status === 401) {
                 // Token was rejected server-side - clear state only, no logoutPopup
                 // logoutPopup here would open a second unwanted popup
@@ -149,10 +140,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const login = useCallback(async () => {
         try {
             await instance.loginPopup(loginRequest);
-            // accounts[] will update automatically via useMsal
-            // useEffect above will fire checkMembership
-        } catch (err) {
+        } catch (err: any) {
+            if (
+                err?.errorCode === "user_cancelled" ||
+                err?.message?.includes("user_cancelled") ||
+                err?.name === "BrowserAuthError"
+            ) {
+                throw err;
+            }
             console.error("[UserProvider] Login failed:", err);
+            throw err;
         }
     }, [instance]);
 

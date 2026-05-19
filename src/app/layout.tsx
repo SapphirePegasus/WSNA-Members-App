@@ -3,6 +3,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Analytics } from '@vercel/analytics/next';
+import ServiceWorkerRegistration from "./components/global/ServiceWorkerRegistration";
 
 // ── Viewport ──────────────────────────────────────────────────────────────────
 // Must be a separate named export from metadata — Next.js App Router requires
@@ -61,6 +62,24 @@ export const metadata: Metadata = {
     { name: "Prittam Bhattacharyya", url: "https://www.sapphirepegasus.com" },
   ],
   creator: "Washington State Nurses Association",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "My WSNA",
+    startupImage: [
+      {
+        url: "/icons/apple-touch-icon.png",
+        media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)",
+      },
+    ],
+  },
+  formatDetection: {
+    telephone: false,
+    date: false,
+    email: false,
+    address: false,
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -69,12 +88,33 @@ export const metadata: Metadata = {
     title: "My WSNA | Member Portal",
     description:
       "The official member portal for Washington State Nurses Association.",
+    images: [
+      {
+        url: "/icons/icon-512x512.png",
+        width: 512,
+        height: 512,
+        alt: "My WSNA Member Portal",
+      },
+    ],
   },
   twitter: {
     card: "summary",
     title: "My WSNA | Member Portal",
     description:
       "The official member portal for Washington State Nurses Association.",
+    images: ["/icons/icon-512x512.png"],
+  },
+  icons: {
+    icon: [
+      { url: "/icons/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/icons/favicon-32x32.png",
   },
   robots: {
     index: true,
@@ -93,9 +133,55 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        {/* Apple PWA meta tags */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="My WSNA" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="application-name" content="My WSNA" />
+
+        {/* Microsoft tile */}
+        <meta name="msapplication-TileColor" content="#0057b8" />
+        <meta name="msapplication-TileImage" content="/icons/icon-192x192.png" />
+        <meta name="msapplication-tap-highlight" content="no" />
+
+        {/* iOS Splash Screens */}
+        <link
+          rel="apple-touch-startup-image"
+          media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)"
+          href="/icons/apple-touch-icon.png"
+        />
+        <link
+          rel="apple-touch-startup-image"
+          media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)"
+          href="/icons/apple-touch-icon.png"
+        />
+        <link
+          rel="apple-touch-startup-image"
+          media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)"
+          href="/icons/apple-touch-icon.png"
+        />
+        <link
+          rel="apple-touch-startup-image"
+          media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)"
+          href="/icons/apple-touch-icon.png"
+        />
+        <link
+          rel="apple-touch-startup-image"
+          media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)"
+          href="/icons/apple-touch-icon.png"
+        />
+        <link
+          rel="apple-touch-startup-image"
+          media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)"
+          href="/icons/apple-touch-icon.png"
+        />
+      </head>
       <body className="antialiased">
         {children}
         <Analytics />
+        <ServiceWorkerRegistration />
       </body>
     </html>
   );
