@@ -17,6 +17,8 @@ const ContentSecurityPolicy = `
   form-action 'self';
   base-uri 'self';
   object-src 'none';
+  worker-src 'self';
+  manifest-src 'self';
   upgrade-insecure-requests;
 `
   .replace(/\s{2,}/g, " ")
@@ -53,10 +55,38 @@ const securityHeaders = [
   },
 ];
 
+// Service worker specific headers
+// sw.js must not be cached by the browser HTTP cache
+// The SW runtime handles its own caching lifecycle
+const serviceWorkerHeaders = [
+  {
+    key: "Cache-Control",
+    value: "no-cache, no-store, must-revalidate",
+  },
+  {
+    key: "Service-Worker-Allowed",
+    value: "/",
+  },
+];
+
+const BUILD_TIMESTAMP = Date.now().toString();
+
 const nextConfig: NextConfig = {
   devIndicators: false,
   async headers() {
     return [
+      // Service worker — must never be HTTP cached
+      {
+        source: "/sw.js",
+        headers: [
+          ...serviceWorkerHeaders,
+          {
+            key: "X-Build-Timestamp",
+            value: BUILD_TIMESTAMP,
+          },
+        ],
+      },
+      // All other routes get security headers
       {
         source: "/(.*)",
         headers: securityHeaders,
