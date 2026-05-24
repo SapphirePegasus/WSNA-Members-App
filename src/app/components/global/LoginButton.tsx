@@ -62,7 +62,7 @@ export default function LoginButton() {
               My WSNA
             </h1>
             <p className="text-sm text-[#1f3c5b] mb-6">
-              Sign in with your WSNA account
+              Sign In with your WSNA account
             </p>
             <button
               onClick={handleLogin}
