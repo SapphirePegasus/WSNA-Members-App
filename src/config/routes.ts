@@ -11,6 +11,7 @@ export const routes: RouteConfig[] = [
     { path: "/growth", protected: true, indexed: false },
     { path: "/not-a-member", protected: false, indexed: false },
     { path: "/redirect", protected: false, indexed: false },
+    { path: "/offline",      protected: false, indexed: false },
 ];
 
 // Derived helpers — consumed by AuthGuard, robots.ts, and any future middleware.

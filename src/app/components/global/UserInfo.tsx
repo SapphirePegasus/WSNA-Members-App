@@ -139,6 +139,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     const login = useCallback(async () => {
         try {
+            instance.clearCache();
             await instance.loginPopup(loginRequest);
         } catch (err: any) {
             if (
