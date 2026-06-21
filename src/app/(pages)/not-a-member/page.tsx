@@ -56,10 +56,10 @@ export default function NotAMemberPage() {
                         Contact WSNA
                     </p>
                     <a
-                        href="mailto:membershipdb@wsna.org"
+                        href="mailto:membership@wsna.org"
                         className="text-base text-primary font-medium hover:underline"
                     >
-                        membershipdb@wsna.org
+                        membership@wsna.org
                     </a>
                 </div>
 
