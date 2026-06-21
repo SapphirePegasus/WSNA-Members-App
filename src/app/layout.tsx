@@ -1,5 +1,3 @@
-// CHANGE THE URL IN THIS CODE AND ALSO IN ROBOTS.TS
-
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Analytics } from '@vercel/analytics/next';
@@ -39,7 +37,7 @@ export const viewport: Viewport = {
 // by exporting its own `metadata` object - as seen in membership and growth pages.
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://wsna.org"),
+  metadataBase: new URL("https://my.wsna.org"),
   title: {
     default: "My WSNA | Member Portal",
     template: "%s | WSNA",
@@ -83,7 +81,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://wsna.org",
+    url: "https://my.wsna.org",
     siteName: "My WSNA",
     title: "My WSNA | Member Portal",
     description:
