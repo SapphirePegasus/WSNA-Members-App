@@ -48,6 +48,10 @@
   margin-bottom: env(safe-area-inset-bottom);
 }
 
+@utility pt-safe-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    SCROLLBAR UTILITY
    ───────────────────────────────────────────────────────────────────────────── */
