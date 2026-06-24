@@ -48,7 +48,7 @@
   margin-bottom: env(safe-area-inset-bottom);
 }
 
-@utility pt-safe-top {
+@utility pt-safe {
   padding-top: max(0.5rem, env(safe-area-inset-top));
 }
 
