@@ -39,16 +39,16 @@ export default function BottomNav({
       activeIcon: HomeActiveIcon,
     },
     {
-      href: "/growth",
-      label: "Growth",
-      icon: GrowthIcon,
-      activeIcon: GrowthActiveIcon,
-    },
-    {
       href: "/membership",
       label: "Membership",
       icon: MembershipCardIcon,
       activeIcon: MembershipCardActiveIcon,
+    },
+    {
+      href: "/growth",
+      label: "Growth",
+      icon: GrowthIcon,
+      activeIcon: GrowthActiveIcon,
     },
   ];
 

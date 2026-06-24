@@ -9,8 +9,8 @@ export default function HeaderPC() {
 
   const navItems = [
     { href: "/home", label: "Home" },
-    { href: "/growth", label: "My Growth" },
     { href: "/membership", label: "My Membership" },
+    { href: "/growth", label: "My Growth" },
   ];
 
   return (

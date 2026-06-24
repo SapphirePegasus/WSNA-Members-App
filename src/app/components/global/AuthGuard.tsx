@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useUser } from "@/app/components/global/UserInfo";
 
 interface AuthGuardProps {
@@ -11,20 +11,23 @@ interface AuthGuardProps {
 export default function AuthGuard({ children }: AuthGuardProps) {
     const { status } = useUser();
     const router = useRouter();
-    const pathname = usePathname();
 
     useEffect(() => {
-        // Still initializing or checking Dataverse - do nothing yet
+        // Still initializing or checking Dataverse — do nothing yet
         if (status === "initializing" || status === "loading") return;
 
-        // Not authenticated or not a member - store intended path and redirect home
-        if (status === "signed-out" || status === "not-registered") {
-            sessionStorage.setItem("redirectAfterLogin", pathname);
+        // Signed out — redirect to login page
+        if (status === "signed-out") {
             router.replace("/");
         }
-    }, [status, pathname, router]);
 
-    // While initializing or loading show nothing - no flash, no redirect yet
+        // "not-registered" and "unrecognized" redirects are handled in
+        // UserProvider.checkMembership where the sessionStorage reason flag
+        // is written before the redirect fires. AuthGuard renders nothing
+        // for both states while the redirect is in flight.
+    }, [status, router]);
+
+    // Spinner during initializing or loading — no flash, no redirect yet
     if (status === "initializing" || status === "loading") {
         return (
             <div className="w-full h-screen flex items-center justify-center">
@@ -33,11 +36,15 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         );
     }
 
-    // Not registered or signed out - render nothing while redirect is in flight
-    if (status === "signed-out" || status === "not-registered") {
+    // Render nothing while any redirect is in flight
+    if (
+        status === "signed-out" ||
+        status === "not-registered" ||
+        status === "unrecognized"
+    ) {
         return null;
     }
 
-    // Registered - render the protected page
+    // Registered — render the protected page
     return <>{children}</>;
 }

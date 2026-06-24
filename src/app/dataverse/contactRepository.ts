@@ -1,61 +1,95 @@
 import { callDataverse } from "./dataverseClient";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MEMBERSHIP TYPE CLASSIFICATION
+// GUIDs sourced from wsna_membertype lookup table in Dataverse.
+// These are the ONLY place GUIDs exist in the codebase — never exposed to
+// the client. Classification result is a typed union, not a raw value.
+//
+// To add or remove a member type: edit only these sets.
+// ─────────────────────────────────────────────────────────────────────────────
+const MEMBER_TYPE_GUIDS = {
+    member: new Set<string>([
+        "32c28d28-bb1b-e611-80dc-5065f38bf1b1",
+        "2dc8ea40-bb1b-e611-80dc-5065f38bf1b1",
+        "4f04bc5c-3ae1-e811-a969-000d3a3101b9",
+        "b1b03706-4b47-e611-80e9-5065f38a5961",
+        "fdc8ebd4-4a47-e611-80e9-5065f38a5961",
+        "66c52829-44e1-e811-a969-000d3a3101b9",
+    ]),
+    nonMember: new Set<string>([
+        "cf6ae234-bb1b-e611-80dc-5065f38bf1b1",
+        "afd74fb5-7e1b-e611-80e1-5065f38be1c1",
+        "1117ee19-4719-e611-80dc-5065f38bf1b1",
+        "65ec631d-31a7-e811-a964-000d3a32c8b8",
+    ]),
+} as const;
+
+// Required statuscode for a valid active contact.
+const ACTIVE_STATUS_CODE = 551050003;
+
+export type MembershipCategory = "member" | "non-member";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// classifyMembership
+// Pure function — no side effects, fully testable.
+// Returns null when the contact does not meet the criteria for either
+// category (unrecognized), which the caller surfaces as a distinct state.
+// ─────────────────────────────────────────────────────────────────────────────
+function classifyMembership(
+    statusCode: number | null,
+    memberTypeGuid: string | null
+): MembershipCategory | null {
+    if (statusCode !== ACTIVE_STATUS_CODE) return null;
+    if (!memberTypeGuid) return null;
+
+    const guid = memberTypeGuid.toLowerCase();
+
+    if (MEMBER_TYPE_GUIDS.member.has(guid)) return "member";
+    if (MEMBER_TYPE_GUIDS.nonMember.has(guid)) return "non-member";
+
+    return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CONTACT FIELD SELECTION
 // This is the single source of truth for which contact columns are fetched.
 // To add a new field: add it to CONTACT_SELECT below AND add it to
 // ContactRecord interface below. Nothing else needs to change.
 //
-// Naming follows Dataverse logical column names exactly.
+// statuscode and _wsna_membertype_value are intentionally NOT in ContactRecord.
+// They are fetched for server-side classification only and discarded after use.
 // ─────────────────────────────────────────────────────────────────────────────
 const CONTACT_SELECT = [
     "contactid",
     "fullname",
     "emailaddress1",
-    "employeeid",        // WSNA member number
-    "wsna_aftid",        // AFT member number
-    "department",        // ANA member number
-    "wsna_showaft",      // union member flag
-    "wsna_credentials",  // credentials suffix (e.g. RN, MN)
-    "wsna_datejoined",   // member since date
+    "employeeid",
+    "wsna_aftid",
+    "department",
+    "wsna_showaft",
+    "wsna_credentials",
+    "wsna_datejoined",
+    "statuscode",
+    "_wsna_membertype_value",
     // ── ADD NEW CONTACT FIELDS BELOW ─────────────────────────────────────────
 ].join(",");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EXPAND DEFINITIONS
-// Each expand retrieves related entity data in a single Dataverse call.
-// parentcustomerid_account uses the polymorphic suffix (_account) to target
-// only account-type lookups. If the contact's primary customer is not an
-// account, this expand returns null safely.
-//
-// To add a new expand: add it to CONTACT_EXPAND and add the resolved fields
-// to ContactRecord below.
 // ─────────────────────────────────────────────────────────────────────────────
 const CONTACT_EXPAND = [
-    // Primary facility - polymorphic lookup, _account suffix required
     "parentcustomerid_account($select=accountnumber,name,wsna_accounttype)",
-    // District - standard lookup to wsna_district table
-    // wsna_name holds the short code (e.g. "NW"), not the long name
     "wsna_district($select=wsna_name)",
     // ── ADD NEW EXPANDS BELOW ────────────────────────────────────────────────
 ].join(",");
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FACILITY TYPE VALUE
-// In the account table, wsna_accounttype = 551050000 identifies facility
-// records. Any expanded account that does not match this value is not a
-// valid facility and should be treated as null by the caller.
-// ─────────────────────────────────────────────────────────────────────────────
 const FACILITY_ACCOUNT_TYPE = 551050000;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ContactRecord
-// The typed shape of a contact as used throughout the application.
-// All related entity data is resolved into flat, typed fields here -
-// no raw OData annotations or lookup IDs leak beyond this file.
-//
-// To add a new field: add it here AND add it to CONTACT_SELECT or
-// CONTACT_EXPAND above.
+// Client-safe shape. No internal Dataverse fields, no GUIDs, no status codes.
+// membershipCategory is the only classification signal exposed to consumers.
 // ─────────────────────────────────────────────────────────────────────────────
 export interface ContactRecord {
     // ── Identity ─────────────────────────────────────────────────────────────
@@ -64,35 +98,35 @@ export interface ContactRecord {
     emailaddress1: string | null;
 
     // ── Membership numbers ────────────────────────────────────────────────────
-    employeeid: string | null;      // WSNA member number
-    wsna_aftid: string | null;      // AFT member number
-    department: string | null;      // ANA member number
+    employeeid: string | null;
+    wsna_aftid: string | null;
+    department: string | null;
 
     // ── Member profile ────────────────────────────────────────────────────────
     wsna_credentials: string | null;
     wsna_datejoined: string | null;
-    wsna_showaft: boolean;           // true = union member
+    wsna_showaft: boolean;
+
+    // ── Membership classification ─────────────────────────────────────────────
+    // Derived server-side from statuscode + wsna_membertype lookup.
+    // "member"     → full access, all IDs visible
+    // "non-member" → limited access, IDs hidden
+    membershipCategory: MembershipCategory;
 
     // ── Resolved from parentcustomerid_account expand ─────────────────────────
-    // null when no valid facility account is linked
-    primaryFacilityCode: string | null;   // accountnumber (e.g. "SJBEL")
-    primaryFacilityName: string | null;   // account name display value
+    primaryFacilityCode: string | null;
+    primaryFacilityName: string | null;
 
     // ── Resolved from wsna_district expand ───────────────────────────────────
-    // null when no district is assigned or district has no code
-    districtCode: string | null;    // wsna_name (e.g. "NW")
+    districtCode: string | null;
 
     // ── ADD NEW RESOLVED FIELDS HERE ─────────────────────────────────────────
-    // Follow the pattern above: typed field, null when not available,
-    // comment explaining the source column and example value.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RAW DATAVERSE SHAPE
-// Internal type only - never exported. Represents the raw OData response
-// before we normalize it into ContactRecord. Keeps the normalization logic
-// explicit and prevents raw Dataverse shapes from leaking into the rest of
-// the application.
+// Internal only — never exported. Raw OData wire format before normalisation.
+// statuscode and _wsna_membertype_value are present here ONLY.
 // ─────────────────────────────────────────────────────────────────────────────
 interface RawContactDataverse {
     contactid: string;
@@ -104,13 +138,13 @@ interface RawContactDataverse {
     wsna_showaft: boolean | null;
     wsna_credentials: string | null;
     wsna_datejoined: string | null;
-    // Expanded account - null if parentcustomerid is not an account
+    statuscode: number | null;
+    _wsna_membertype_value: string | null;
     parentcustomerid_account: {
         accountnumber: string | null;
         name: string | null;
         wsna_accounttype: number | null;
     } | null;
-    // Expanded district
     wsna_district: {
         wsna_name: string | null;
     } | null;
@@ -119,16 +153,24 @@ interface RawContactDataverse {
 // ─────────────────────────────────────────────────────────────────────────────
 // normalizeContact
 // Converts raw Dataverse OData response into a clean ContactRecord.
-// All null-coalescing and facility type validation happens here.
-// This is the only place in the codebase that knows about raw Dataverse
-// field names and OData expand structures.
+// Classification happens here. Raw fields are discarded after use.
+// Returns null if the contact's membertype/status does not qualify for access.
 // ─────────────────────────────────────────────────────────────────────────────
-function normalizeContact(raw: RawContactDataverse): ContactRecord {
+function normalizeContact(
+    raw: RawContactDataverse
+): ContactRecord | null {
+    const membershipCategory = classifyMembership(
+        raw.statuscode,
+        raw._wsna_membertype_value
+    );
+
+    // Contact exists in Dataverse but does not belong to any recognised
+    // membership category — signal as null so the caller can distinguish
+    // this from "contact not found at all".
+    if (membershipCategory === null) return null;
+
     const account = raw.parentcustomerid_account;
 
-    // Only treat the expanded account as a valid facility if it matches
-    // the facility account type. Filters out "employer unknown" and any
-    // non-facility account types that may be linked.
     const isValidFacility =
         account !== null &&
         account.wsna_accounttype === FACILITY_ACCOUNT_TYPE &&
@@ -145,6 +187,7 @@ function normalizeContact(raw: RawContactDataverse): ContactRecord {
         wsna_showaft: raw.wsna_showaft ?? false,
         wsna_credentials: raw.wsna_credentials ?? null,
         wsna_datejoined: raw.wsna_datejoined ?? null,
+        membershipCategory,
         primaryFacilityCode: isValidFacility ? account!.accountnumber : null,
         primaryFacilityName: isValidFacility ? (account!.name ?? null) : null,
         districtCode: raw.wsna_district?.wsna_name ?? null,
@@ -152,21 +195,26 @@ function normalizeContact(raw: RawContactDataverse): ContactRecord {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RETURN TYPE
+// Three distinct outcomes the caller must handle explicitly:
+//   ContactRecord   → contact found and classified (member or non-member)
+//   null            → contact not found in Dataverse at all
+//   "unrecognized"  → contact found but membertype/status matches no category
+//
+// Using a discriminated union literal rather than throwing forces the caller
+// to handle all cases at compile time — no silent swallowing of edge cases.
+// ─────────────────────────────────────────────────────────────────────────────
+export type GetContactResult = ContactRecord | null | "unrecognized";
+
+// ─────────────────────────────────────────────────────────────────────────────
 // getContactByEmail
-// Fetches a single contact by email address with all required fields and
-// related entity data resolved in one Dataverse call.
-// Returns null if no matching contact is found.
-// Throws on Dataverse API errors - the caller is responsible for catching.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function getContactByEmail(
     email: string
-): Promise<ContactRecord | null> {
+): Promise<GetContactResult> {
     const normalizedEmail = email.trim().toLowerCase();
     const encodedEmail = encodeURIComponent(normalizedEmail);
 
-    // Build expand string manually - do NOT use encodeURIComponent on the
-    // full expand string. Parentheses and $select inside expand must remain
-    // unencoded for Dataverse OData to parse them correctly.
     const select = CONTACT_SELECT;
     const expand = CONTACT_EXPAND;
     const filter = `emailaddress1%20eq%20%27${encodedEmail}%27`;
@@ -184,5 +232,13 @@ export async function getContactByEmail(
         return null;
     }
 
-    return normalizeContact(data.value[0] as RawContactDataverse);
+    const raw = data.value[0] as RawContactDataverse;
+    const contact = normalizeContact(raw);
+
+    // Contact row exists but membertype/status is unrecognised.
+    // Distinct from null (not found) so the API route and UI
+    // can show the correct messaging.
+    if (contact === null) return "unrecognized";
+
+    return contact;
 }

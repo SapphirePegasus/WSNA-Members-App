@@ -35,7 +35,7 @@ export default function DownloadCard({ file }: DownloadCardProps) {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`Download ${file.title} - ${formattedSize} ${kindLabel}`}
-                className="group flex flex-row w-full border-2 border-transparent hover:border-primary-300 rounded-lg transition-colors justify-between items-center shadow-sm bg-zinc-100 h-full text-left"
+                className="group flex flex-row w-full border-2 border-zinc-300 hover:border-primary-300 rounded-lg transition-colors justify-between items-center shadow-sm bg-zinc-100 h-full text-left"
             >
                 {/* ── Icon column ───────────────────────────────────────────────── */}
                 <div className="flex items-center bg-zinc-100 w-10 text-center group-hover:bg-primary-100 self-stretch justify-center shrink-0 rounded-l-lg transition-colors">

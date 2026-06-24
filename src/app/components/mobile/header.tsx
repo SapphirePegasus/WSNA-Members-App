@@ -7,7 +7,7 @@ export default function MobileHeader() {
   //const label = formatPathname(usePathname());
 
   return (
-    <header className="md:hidden sticky top-0 left-0 w-full bg-primary border-b border-gray-300 flex items-center justify-between py-2 px-4 ">
+    <header className="md:hidden sticky top-0 left-0 w-full bg-primary border-b border-gray-300 flex items-center justify-between py-2 px-4 pt-safe-top">
       <h1 className="text-2xl text-white leading-none font-extrabold">My WSNA</h1>
       <UserMenuMobile />
     </header>

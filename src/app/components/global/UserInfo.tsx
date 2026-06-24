@@ -15,11 +15,13 @@ import type { ContactRecord } from "@/app/dataverse/contactRepository";
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type AuthStatus =
-    | "initializing"  // MSAL not yet ready
-    | "signed-out"    // no account in MSAL
-    | "loading"       // account found, Dataverse check in progress
-    | "registered"    // account found + exists in Dataverse contacts
-    | "not-registered"; // account found + does NOT exist in Dataverse contacts
+    | "initializing"    // MSAL not yet ready
+    | "signed-out"      // no account in MSAL
+    | "loading"         // account found, Dataverse check in progress
+    | "registered"      // account found + classified as member or non-member
+    | "not-registered"  // account found + no contact row in Dataverse
+    | "unrecognized";   // account found + contact exists but membertype/status
+// does not match any recognised category
 
 export interface User {
     name: string;
@@ -33,6 +35,11 @@ interface UserContextType {
     login: () => Promise<void>;
     logout: () => Promise<void>;
 }
+
+// ── Session storage key ───────────────────────────────────────────────────────
+// Single source of truth for the key name — consumed here and in
+// /not-a-member page. Never put a reason in the URL.
+const NOT_A_MEMBER_REASON_KEY = "notAMemberReason";
 
 // ── Context ──────────────────────────────────────────────────────────────────
 
@@ -48,7 +55,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [contact, setContact] = useState<ContactRecord | null>(null);
     const [status, setStatus] = useState<AuthStatus>("initializing");
 
-    // ── Dataverse membership check ─────────────────────────────────────────────
+    // ── Shared MSAL cleanup ───────────────────────────────────────────────────
+    // Extracted to avoid duplication between not-registered and unrecognized
+    // paths. Both require the same MSAL teardown before status is set.
+    const clearMsalSession = useCallback(async () => {
+        await instance.clearCache();
+        instance.setActiveAccount(null);
+    }, [instance]);
+
+    // ── Dataverse membership check ────────────────────────────────────────────
 
     const checkMembership = useCallback(async () => {
         const account = accounts[0];
@@ -67,7 +82,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         });
 
         try {
-            // Silently acquire the ID token - no popup, uses cached token
             const tokenResponse = await instance.acquireTokenSilent({
                 ...loginRequest,
                 account,
@@ -79,7 +93,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 throw new Error("No ID token returned from acquireTokenSilent");
             }
 
-            // Send verified token to API - email is extracted server-side from claims
             const res = await fetch("/api/contact", {
                 method: "POST",
                 headers: {
@@ -89,8 +102,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             });
 
             if (res.status === 401) {
-                // Token was rejected server-side - clear state only, no logoutPopup
-                // logoutPopup here would open a second unwanted popup
                 setUser(null);
                 setContact(null);
                 setStatus("signed-out");
@@ -98,36 +109,49 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (!res.ok) {
-                throw new Error(`Unexpected response from /api/contact: ${res.status}`);
+                throw new Error(
+                    `Unexpected response from /api/contact: ${res.status}`
+                );
             }
 
             const data = await res.json();
 
             if (data.found) {
+                // ── Registered: member or non-member ─────────────────────────
                 setContact(data.contact as ContactRecord);
                 setStatus("registered");
 
-                // Redirect to stored path or fallback to /membership
                 const redirectTo =
                     sessionStorage.getItem("redirectAfterLogin") ?? "/home";
                 sessionStorage.removeItem("redirectAfterLogin");
                 router.replace(redirectTo);
-            } else {
-                // Valid MS account but not in Dataverse - reject and clean up
-                // Silently clear the MSAL session
-                setContact(null);
-                setStatus("not-registered");
-                await instance.clearCache();
-                instance.setActiveAccount(null);
-                router.replace("/not-a-member");
+                return;
             }
+
+            // ── Contact not found or unrecognized ─────────────────────────────
+            // Write the reason before MSAL cleanup and status update so that
+            // by the time AuthGuard reacts to the new status and redirects,
+            // the reason is already in sessionStorage for the target page.
+            const reason: "not-registered" | "unrecognized" =
+                data.reason === "unrecognized" ? "unrecognized" : "not-registered";
+
+            sessionStorage.setItem(NOT_A_MEMBER_REASON_KEY, reason);
+
+            setUser(null);
+            setContact(null);
+
+            await clearMsalSession();
+
+            setStatus(reason);
+            router.replace("/not-a-member");
+
         } catch (err) {
             console.error("[UserProvider] Membership check failed:", err);
             setUser(null);
             setContact(null);
             setStatus("signed-out");
         }
-    }, [accounts, instance, router]);
+    }, [accounts, instance, router, clearMsalSession]);
 
     // ── Watch for MSAL account changes ────────────────────────────────────────
 
@@ -160,7 +184,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         try {
             const account = accounts[0];
             if (account) {
-                await instance.logoutPopup({ account, postLogoutRedirectUri: "/redirect" });
+                await instance.logoutPopup({
+                    account,
+                    postLogoutRedirectUri: "/redirect",
+                });
             }
         } catch (err) {
             console.error("[UserProvider] Logout failed:", err);
@@ -182,7 +209,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         logout,
     };
 
-    return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
+    return (
+        <UserContext.Provider value={value}>{children}</UserContext.Provider>
+    );
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
