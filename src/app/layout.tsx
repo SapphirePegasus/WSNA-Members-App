@@ -63,7 +63,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "My WSNA",
     startupImage: [
       {
@@ -134,7 +134,7 @@ export default function RootLayout({
       <head>
         {/* Apple PWA meta tags */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="My WSNA" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="application-name" content="My WSNA" />
