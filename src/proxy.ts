@@ -157,7 +157,7 @@ export function proxy(req: NextRequest): NextResponse {
 // Tells Next.js which paths this middleware runs on.
 // Explicitly excludes static assets and Next.js internals for performance.
 // ─────────────────────────────────────────────────────────────────────────────
-export const proxyConfig = {
+export const config = {
     matcher: [
         "/api/:path*",
     ],

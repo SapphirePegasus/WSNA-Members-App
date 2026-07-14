@@ -1,4 +1,9 @@
-import { createRemoteJWKSet, jwtVerify, decodeJwt } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+import {
+    getMsalClientId,
+    getExternalTenantId,
+    getExternalTenantSubdomain,
+} from "@/app/lib/env";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared JWT verification utility.
@@ -11,11 +16,16 @@ import { createRemoteJWKSet, jwtVerify, decodeJwt } from "jose";
 // Callers catch this and return the appropriate NextResponse.
 // ─────────────────────────────────────────────────────────────────────────────
 
+const TENANT_ID = getExternalTenantId();
+const SUBDOMAIN = getExternalTenantSubdomain();
+
 const JWKS = createRemoteJWKSet(
     new URL(
-        "https://login.microsoftonline.com/common/discovery/v2.0/keys"
+        `https://${SUBDOMAIN}.ciamlogin.com/${TENANT_ID}/discovery/v2.0/keys`
     )
 );
+
+const ISSUER = `https://${TENANT_ID}.ciamlogin.com/${TENANT_ID}/v2.0`;
 
 export class VerifyAuthError extends Error {
     constructor(
@@ -40,27 +50,22 @@ export async function verifyAuth(req: Request): Promise<string> {
 
     const idToken = authHeader.slice(7);
 
-    // ── Step 2: Decode to extract tenant ID ────────────────────────────────
-    let tid: string;
-    try {
-        const decoded = decodeJwt(idToken);
-        tid = decoded.tid as string;
-
-        if (!tid) {
-            throw new VerifyAuthError("Token missing tid claim", 401);
-        }
-    } catch (err) {
-        if (err instanceof VerifyAuthError) throw err;
-        throw new VerifyAuthError("Failed to decode token", 401);
-    }
-
-    // ── Step 3: Verify signature and claims ────────────────────────────────
+    // ── Step 2: Verify signature and claims ────────────────────────────────
+    // No pre-decode step. Issuer and audience are pinned constants, so
+    // nothing is read out of the token before its signature is checked.
     let email: string;
     try {
         const { payload } = await jwtVerify(idToken, JWKS, {
-            issuer: `https://login.microsoftonline.com/${tid}/v2.0`,
-            audience: process.env.NEXT_PUBLIC_MSAL_CLIENT_ID,
+            issuer: ISSUER,
+            audience: getMsalClientId(),
         });
+
+        // Defence in depth - the pinned issuer already guarantees this,
+        // but assert tid explicitly so a future issuer change cannot
+        // silently widen which tenant is accepted.
+        if (payload.tid !== TENANT_ID) {
+            throw new VerifyAuthError("Token issued by unexpected tenant", 401);
+        }
 
         const rawEmail =
             (payload.email as string | undefined) ??

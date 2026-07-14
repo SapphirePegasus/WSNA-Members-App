@@ -1,5 +1,3 @@
-// CHECK LINE 343 AND 387 LATER
-
 import { NextResponse } from "next/server";
 import type {
     MembershipLinksResponse,
@@ -8,9 +6,6 @@ import type {
 import { parseMembershipLinksRequest } from "@/app/lib/validate";
 import { verifyAuth, VerifyAuthError } from "@/app/lib/verifyAuth";
 import { getCraftToken, getWsnaApiBase } from "@/app/lib/env";
-
-//const GRAPHQL_URL = process.env.NEXT_PUBLIC_WSNA_API_BASE!;
-//const TOKEN = process.env.CRAFT_GRAPHQL_TOKEN!;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GRAPHQL FETCHER
@@ -335,27 +330,13 @@ export async function POST(req: Request): Promise<NextResponse> {
             );
         }
 
-        /*// Parse body - safe after the guard above
-        let body: MembershipLinksRequest;
-        try {
-            body = (await req.json()) as MembershipLinksRequest;
-        } catch {
-            return NextResponse.json(
-                { error: "Invalid JSON in request body" },
-                { status: 400 }
-            );
-        }
-
-        const { facilityCode, districtCode, isUnionMember } = body;*/
-
         // ── Parse and validate request body ──────────────────────────────────────
         const parsed = await parseMembershipLinksRequest(req);
         if (parsed.error) return parsed.error;
 
         const { facilityCode, districtCode, isUnionMember } = parsed.data;
 
-        // Validate presence of all required fields.
-        // facilityCode and districtCode may legitimately be null -
+        // facilityCode and districtCode may be null
         // null means no facility or district assigned in CRM.
         // undefined means the field was missing from the request entirely.
         if (

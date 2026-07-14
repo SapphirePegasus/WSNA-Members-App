@@ -99,3 +99,31 @@ export function getMsalRedirectUri(): string {
         process.env.NEXT_PUBLIC_MSAL_REDIRECT_URI
     );
 }
+
+export function getMsalAuthority(): string {
+    return requireEnv(
+        "NEXT_PUBLIC_MSAL_AUTHORITY",
+        process.env.NEXT_PUBLIC_MSAL_AUTHORITY
+    );
+}
+
+export function getMsalKnownAuthority(): string {
+    return requireEnv(
+        "NEXT_PUBLIC_MSAL_KNOWN_AUTHORITY",
+        process.env.NEXT_PUBLIC_MSAL_KNOWN_AUTHORITY
+    );
+}
+
+export function getExternalTenantId(): string {
+    return requireEnv(
+        "NEXT_PUBLIC_EXTERNAL_TENANT_ID",
+        process.env.NEXT_PUBLIC_EXTERNAL_TENANT_ID
+    );
+}
+
+export function getExternalTenantSubdomain(): string {
+    return requireEnv(
+        "NEXT_PUBLIC_EXTERNAL_TENANT_SUBDOMAIN",
+        process.env.NEXT_PUBLIC_EXTERNAL_TENANT_SUBDOMAIN
+    );
+}
