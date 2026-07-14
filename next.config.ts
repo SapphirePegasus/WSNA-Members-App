@@ -5,16 +5,17 @@ const ContentSecurityPolicy = `
   script-src 'self' 'unsafe-eval' 'unsafe-inline' https://login.microsoftonline.com;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob:;
-  font-src 'self';
+  font-src 'self' https://fonts.wsna.org;
   connect-src 'self'
+    https://*.ciamlogin.com
     https://login.microsoftonline.com
     https://login.microsoft.com
     https://graph.microsoft.com
     https://*.dynamics.com
     https://*.crm.dynamics.com;
-  frame-src 'self' https://login.microsoftonline.com;
+  frame-src 'self' https://*.ciamlogin.com https://login.microsoftonline.com;
+  form-action 'self' https://*.ciamlogin.com;
   frame-ancestors 'none';
-  form-action 'self';
   base-uri 'self';
   object-src 'none';
   worker-src 'self';
