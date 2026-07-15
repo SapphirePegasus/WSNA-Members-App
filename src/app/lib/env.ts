@@ -100,17 +100,16 @@ export function getMsalRedirectUri(): string {
     );
 }
 
-export function getMsalAuthority(): string {
-    return requireEnv(
-        "NEXT_PUBLIC_MSAL_AUTHORITY",
-        process.env.NEXT_PUBLIC_MSAL_AUTHORITY
-    );
-}
 
-export function getMsalKnownAuthority(): string {
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTERNAL TENANT (Entra External ID / CIAM) - email one-time-passcode sign-in
+// Tenant ID and subdomain are public configuration - they appear in every
+// authentication URL the browser visits, so NEXT_PUBLIC_ exposure is safe.
+// ─────────────────────────────────────────────────────────────────────────────
+export function getExternalClientId(): string {
     return requireEnv(
-        "NEXT_PUBLIC_MSAL_KNOWN_AUTHORITY",
-        process.env.NEXT_PUBLIC_MSAL_KNOWN_AUTHORITY
+        "NEXT_PUBLIC_EXTERNAL_CLIENT_ID",
+        process.env.NEXT_PUBLIC_EXTERNAL_CLIENT_ID
     );
 }
 
@@ -126,4 +125,21 @@ export function getExternalTenantSubdomain(): string {
         "NEXT_PUBLIC_EXTERNAL_TENANT_SUBDOMAIN",
         process.env.NEXT_PUBLIC_EXTERNAL_TENANT_SUBDOMAIN
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WORKFORCE TENANT ID - server-side only.
+// Used exclusively by verifyAuth to pin the issuer for @wsna.org tokens.
+// The client keeps using the "common" authority (NEXT_PUBLIC_MSAL_TENANT),
+// so this must be the concrete tenant GUID, never "common".
+// ─────────────────────────────────────────────────────────────────────────────
+export function getWorkforceTenantId(): string {
+    const value = requireServerEnv("WORKFORCE_TENANT_ID");
+    if (value === "common" || value === "organizations" || value === "consumers") {
+        throw new Error(
+            "[env] WORKFORCE_TENANT_ID must be the tenant GUID, not an alias. " +
+            "Aliases cannot be used for issuer pinning."
+        );
+    }
+    return value;
 }
