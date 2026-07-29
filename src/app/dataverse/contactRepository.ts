@@ -10,23 +10,26 @@ import { callDataverse } from "./dataverseClient";
 // ─────────────────────────────────────────────────────────────────────────────
 const MEMBER_TYPE_GUIDS = {
     member: new Set<string>([
-        "32c28d28-bb1b-e611-80dc-5065f38bf1b1",
-        "2dc8ea40-bb1b-e611-80dc-5065f38bf1b1",
-        "4f04bc5c-3ae1-e811-a969-000d3a3101b9",
-        "b1b03706-4b47-e611-80e9-5065f38a5961",
-        "fdc8ebd4-4a47-e611-80e9-5065f38a5961",
-        "66c52829-44e1-e811-a969-000d3a3101b9",
+        "32c28d28-bb1b-e611-80dc-5065f38bf1b1", // Member
+        "2dc8ea40-bb1b-e611-80dc-5065f38bf1b1", // Professional Org
+        "4f04bc5c-3ae1-e811-a969-000d3a3101b9", // Local Unit Program Member
+        "b1b03706-4b47-e611-80e9-5065f38a5961", // Lifetime
+        "fdc8ebd4-4a47-e611-80e9-5065f38a5961", // Honorary
+        "66c52829-44e1-e811-a969-000d3a3101b9", // Organizational Affiliate Nurse
     ]),
     nonMember: new Set<string>([
-        "cf6ae234-bb1b-e611-80dc-5065f38bf1b1",
-        "afd74fb5-7e1b-e611-80e1-5065f38be1c1",
-        "1117ee19-4719-e611-80dc-5065f38bf1b1",
-        "65ec631d-31a7-e811-a964-000d3a32c8b8",
+        "cf6ae234-bb1b-e611-80dc-5065f38bf1b1", // Non-Member
+        "afd74fb5-7e1b-e611-80e1-5065f38be1c1", // Religious Objector
+        "1117ee19-4719-e611-80dc-5065f38bf1b1", // Agency Fee Payer
+        "65ec631d-31a7-e811-a964-000d3a32c8b8", // Voluntary Fair Share Payer
     ]),
 } as const;
 
-// Required statuscode for a valid active contact.
-const ACTIVE_STATUS_CODE = 551050003;
+// Required statuscode for a valid wsna_status.
+const VALID_STATUS_CODES = new Set<number>([
+    551050003, // Active
+    551050000, // Pending
+]);
 
 export type MembershipCategory = "member" | "non-member";
 
@@ -40,7 +43,7 @@ function classifyMembership(
     statusCode: number | null,
     memberTypeGuid: string | null
 ): MembershipCategory | null {
-    if (statusCode !== ACTIVE_STATUS_CODE) return null;
+    if (statusCode === null || !VALID_STATUS_CODES.has(statusCode)) return null;
     if (!memberTypeGuid) return null;
 
     const guid = memberTypeGuid.toLowerCase();

@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useUser } from "@/app/components/global/UserInfo";
+import { captureRedirectTarget } from "@/app/lib/authRedirect";
 
 interface AuthGuardProps {
     children: React.ReactNode;
@@ -11,13 +12,20 @@ interface AuthGuardProps {
 export default function AuthGuard({ children }: AuthGuardProps) {
     const { status } = useUser();
     const router = useRouter();
+    const pathname = usePathname();
 
     useEffect(() => {
         // Still initializing or checking Dataverse — do nothing yet
         if (status === "initializing" || status === "loading") return;
 
-        // Signed out — redirect to login page
+        // Signed out — remember where the user was trying to go (path +
+        // query, e.g. /membership?tab=resources) so login can restore it,
+        // then redirect to the login page.
         if (status === "signed-out") {
+            // window.location.search is client-only and needs no Suspense
+            // boundary, unlike the useSearchParams() hook - which would force
+            // every page under this guard to bail out of static prerendering.
+            captureRedirectTarget(pathname, window.location.search);
             router.replace("/");
         }
 
@@ -25,7 +33,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         // UserProvider.checkMembership where the sessionStorage reason flag
         // is written before the redirect fires. AuthGuard renders nothing
         // for both states while the redirect is in flight.
-    }, [status, router]);
+    }, [status, router, pathname]);
 
     // Spinner during initializing or loading — no flash, no redirect yet
     if (status === "initializing" || status === "loading") {

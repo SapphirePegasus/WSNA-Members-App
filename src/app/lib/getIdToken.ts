@@ -1,30 +1,12 @@
 "use client";
 
-import { PublicClientApplication } from "@azure/msal-browser";
-import { msalConfig, loginRequest } from "@/app/lib/msalConfig";
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Acquires the current user's ID token silently from MSAL.
-// Used by client-side hooks that call protected API routes.
+// Acquires the current user's ID token silently.
+// Thin re-export kept for API stability - hooks that call protected routes
+// import from here. All MSAL state lives in authClient; this module must
+// never construct its own PublicClientApplication.
 // Returns null if no account is found or silent acquisition fails -
-// callers should treat null as an unauthenticated state and not proceed.
+// callers treat null as an unauthenticated state and do not proceed.
 // ─────────────────────────────────────────────────────────────────────────────
-export async function getIdToken(): Promise<string | null> {
-    try {
-        // Reuse the singleton instance - do not create a new one
-        const instance = new PublicClientApplication(msalConfig);
-        await instance.initialize();
 
-        const accounts = instance.getAllAccounts();
-        if (!accounts.length) return null;
-
-        const response = await instance.acquireTokenSilent({
-            ...loginRequest,
-            account: accounts[0],
-        });
-
-        return response.idToken ?? null;
-    } catch {
-        return null;
-    }
-}
+export { acquireIdToken as getIdToken } from "@/app/lib/authClient";

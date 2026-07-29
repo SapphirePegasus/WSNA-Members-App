@@ -23,6 +23,13 @@ export default function HomePageContent() {
 
     const cards = [
         {
+            icon: <BookOpenIcon className="w-6 h-6" />,
+            title: "My Growth Resources",
+            description:
+                "Access professional development materials and resources for your career growth.",
+            href: "/growth",
+        },
+        {
             icon: <MembershipCardIcon className="w-6 h-6" />,
             title: "My Membership Card",
             description:
@@ -35,13 +42,6 @@ export default function HomePageContent() {
             description:
                 "Download important documents including board meeting notes and membership materials.",
             href: "/membership?tab=resources",
-        },
-        {
-            icon: <BookOpenIcon className="w-6 h-6" />,
-            title: "My Growth Resources",
-            description:
-                "Access professional development materials and resources for your career growth.",
-            href: "/growth",
         },
     ] as const;
 

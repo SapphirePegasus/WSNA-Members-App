@@ -1,5 +1,3 @@
-// CHECK LINE 151 LATER
-
 import { NextRequest, NextResponse } from "next/server";
 import { normaliseFileKind } from "@/app/lib/fileIconMap";
 import type { RawTopicEntry, ResourcesApiResponse } from "@/app/types/resources";
@@ -143,24 +141,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const { searchParams } = request.nextUrl;
   const section = searchParams.get("section")?.trim();
-
-  // Validate the section param - never send an empty string to Craft CMS.
-  /*if (!section) {
-    return NextResponse.json(
-      { error: "Missing required query parameter: section" },
-      { status: 400 }
-    );
-  }
-
-  // Sanity-check the section format to prevent arbitrary string injection
-  // into the GraphQL variables. Craft section handles are alphanumeric + underscore only.
-  const VALID_SECTION_PATTERN = /^[a-zA-Z0-9_]+$/;
-  if (!VALID_SECTION_PATTERN.test(section)) {
-    return NextResponse.json(
-      { error: "Invalid section parameter format" },
-      { status: 400 }
-    );
-  }*/
 
   const sectionResult = validateSectionParam(section);
   if (sectionResult.error) return sectionResult.error;

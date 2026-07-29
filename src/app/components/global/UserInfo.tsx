@@ -6,17 +6,30 @@ import React, {
     useState,
     useEffect,
     useCallback,
+    useRef,
 } from "react";
-import { useMsal } from "@azure/msal-react";
 import { useRouter } from "next/navigation";
-import { loginRequest } from "@/app/lib/msalConfig";
+import { consumeRedirectTarget } from "@/app/lib/authRedirect";
+import {
+    getActiveSession,
+    login as authLogin,
+    logout as authLogout,
+    clearSession,
+    acquireIdToken,
+    type AuthSource,
+} from "@/app/lib/authClient";
+import {
+    mapAuthError,
+    rateLimitedError,
+    type AuthUiError,
+} from "@/app/lib/authErrors";
 import type { ContactRecord } from "@/app/dataverse/contactRepository";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type AuthStatus =
-    | "initializing"    // MSAL not yet ready
-    | "signed-out"      // no account in MSAL
+    | "initializing"    // auth clients not yet probed
+    | "signed-out"      // no account in either MSAL client
     | "loading"         // account found, Dataverse check in progress
     | "registered"      // account found + classified as member or non-member
     | "not-registered"  // account found + no contact row in Dataverse
@@ -32,8 +45,17 @@ interface UserContextType {
     user: User | null;
     contact: ContactRecord | null;
     status: AuthStatus;
-    login: () => Promise<void>;
+    // source defaults to "workforce" - the existing sign-in button behaviour.
+    // Pass "external" only from the email one-time-passcode link.
+    login: (source?: AuthSource) => Promise<void>;
     logout: () => Promise<void>;
+    // User-facing auth error for the toast. Raw detail stays in the console.
+    authError: AuthUiError | null;
+    clearAuthError: () => void;
+    // Graceful retry: re-runs the membership check if a session already
+    // exists (no second popup), otherwise re-opens sign-in with the same
+    // source (workforce/external) the user last attempted.
+    retry: () => Promise<void>;
 }
 
 // ── Session storage key ───────────────────────────────────────────────────────
@@ -48,27 +70,26 @@ const UserContext = createContext<UserContextType | null>(null);
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-    const { instance, accounts } = useMsal();
     const router = useRouter();
 
     const [user, setUser] = useState<User | null>(null);
     const [contact, setContact] = useState<ContactRecord | null>(null);
     const [status, setStatus] = useState<AuthStatus>("initializing");
+    const [authError, setAuthError] = useState<AuthUiError | null>(null);
+    const lastSourceRef = useRef<AuthSource>("workforce");
+    // True only for the window between an interactive login() call and the
+    // membership check it triggers. Session-restore on mount / reload leaves
+    // this false, so a reload never navigates away from the current URL.
+    const interactiveLoginRef = useRef(false);
 
-    // ── Shared MSAL cleanup ───────────────────────────────────────────────────
-    // Extracted to avoid duplication between not-registered and unrecognized
-    // paths. Both require the same MSAL teardown before status is set.
-    const clearMsalSession = useCallback(async () => {
-        await instance.clearCache();
-        instance.setActiveAccount(null);
-    }, [instance]);
+    const clearAuthError = useCallback(() => setAuthError(null), []);
 
     // ── Dataverse membership check ────────────────────────────────────────────
 
     const checkMembership = useCallback(async () => {
-        const account = accounts[0];
+        const session = await getActiveSession();
 
-        if (!account) {
+        if (!session) {
             setUser(null);
             setContact(null);
             setStatus("signed-out");
@@ -77,20 +98,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
         setStatus("loading");
         setUser({
-            name: account.name ?? "",
-            email: account.username ?? "",
+            name: session.account.name ?? "",
+            email: session.account.username ?? "",
         });
 
         try {
-            const tokenResponse = await instance.acquireTokenSilent({
-                ...loginRequest,
-                account,
-            });
-
-            const idToken = tokenResponse.idToken;
+            const idToken = await acquireIdToken();
 
             if (!idToken) {
-                throw new Error("No ID token returned from acquireTokenSilent");
+                throw new Error("No ID token returned from silent acquisition");
             }
 
             const res = await fetch("/api/contact", {
@@ -99,11 +115,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${idToken}`,
                 },
+                // Never hang a spinner forever - a stalled request surfaces
+                // as a timeout toast instead of an infinite "loading" state.
+                signal: AbortSignal.timeout(15_000),
             });
 
             if (res.status === 401) {
                 setUser(null);
                 setContact(null);
+                setStatus("signed-out");
+                return;
+            }
+
+            if (res.status === 429) {
+                // Our own rate limiter. The MSAL session is intact, so the
+                // toast's Retry re-runs this check without a new popup.
+                setAuthError(rateLimitedError(res.headers.get("Retry-After")));
                 setStatus("signed-out");
                 return;
             }
@@ -121,10 +148,20 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 setContact(data.contact as ContactRecord);
                 setStatus("registered");
 
-                const redirectTo =
-                    sessionStorage.getItem("redirectAfterLogin") ?? "/home";
-                sessionStorage.removeItem("redirectAfterLogin");
-                router.replace(redirectTo);
+                // Navigation policy:
+                //   - Fresh interactive login  -> stored deep link, else /home.
+                //   - Authenticated but sitting on the login page ("/"), e.g.
+                //     after a reload there or a retry recovery -> forward the
+                //     same way; the login page is never a destination.
+                //   - Plain reload anywhere else -> stay put. The current URL,
+                //     including any ?tab= deep link, is already correct.
+                // consumeRedirectTarget() validates the stored value (same-app
+                // absolute paths only) and clears it in one step.
+                const isOnLoginPage = window.location.pathname === "/";
+                if (interactiveLoginRef.current || isOnLoginPage) {
+                    interactiveLoginRef.current = false;
+                    router.replace(consumeRedirectTarget() ?? "/home");
+                }
                 return;
             }
 
@@ -137,58 +174,80 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
             sessionStorage.setItem(NOT_A_MEMBER_REASON_KEY, reason);
 
+            // This login attempt is terminating at /not-a-member, so drop any
+            // captured deep link and clear the interactive flag - neither
+            // should survive into a later session.
+            interactiveLoginRef.current = false;
+            consumeRedirectTarget();
+
             setUser(null);
             setContact(null);
 
-            await clearMsalSession();
+            await clearSession();
 
             setStatus(reason);
             router.replace("/not-a-member");
 
         } catch (err) {
             console.error("[UserProvider] Membership check failed:", err);
+            const mapped = mapAuthError(err);
+            if (mapped) setAuthError(mapped);
             setUser(null);
             setContact(null);
             setStatus("signed-out");
         }
-    }, [accounts, instance, router, clearMsalSession]);
+    }, [router]);
 
-    // ── Watch for MSAL account changes ────────────────────────────────────────
+    // ── Restore any existing session on mount ─────────────────────────────────
 
     useEffect(() => {
-        checkMembership();
+        void checkMembership();
     }, [checkMembership]);
 
     // ── Login ──────────────────────────────────────────────────────────────────
 
-    const login = useCallback(async () => {
-        try {
-            instance.clearCache();
-            await instance.loginPopup(loginRequest);
-        } catch (err: any) {
-            if (
-                err?.errorCode === "user_cancelled" ||
-                err?.message?.includes("user_cancelled") ||
-                err?.name === "BrowserAuthError"
-            ) {
+    const login = useCallback(
+        async (source: AuthSource = "workforce") => {
+            setAuthError(null);
+            lastSourceRef.current = source;
+            interactiveLoginRef.current = true;
+            try {
+                await authLogin(source);
+            } catch (err: unknown) {
+                console.error("[UserProvider] Login failed:", err);
+                const mapped = mapAuthError(err);
+                if (mapped) setAuthError(mapped);
                 throw err;
             }
-            console.error("[UserProvider] Login failed:", err);
-            throw err;
+            // Popup resolved with a signed-in account - run the membership
+            // check explicitly (no msal-react accounts subscription anymore).
+            await checkMembership();
+        },
+        [checkMembership]
+    );
+
+    // ── Retry ──────────────────────────────────────────────────────────────────
+
+    const retry = useCallback(async () => {
+        setAuthError(null);
+        const session = await getActiveSession();
+        if (session) {
+            // Auth already succeeded; only the membership check failed.
+            await checkMembership();
+            return;
         }
-    }, [instance]);
+        try {
+            await login(lastSourceRef.current);
+        } catch {
+            // login() already mapped and surfaced the error.
+        }
+    }, [checkMembership, login]);
 
     // ── Logout ─────────────────────────────────────────────────────────────────
 
     const logout = useCallback(async () => {
         try {
-            const account = accounts[0];
-            if (account) {
-                await instance.logoutPopup({
-                    account,
-                    postLogoutRedirectUri: "/redirect",
-                });
-            }
+            await authLogout();
         } catch (err) {
             console.error("[UserProvider] Logout failed:", err);
         } finally {
@@ -197,7 +256,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             setStatus("signed-out");
             router.replace("/");
         }
-    }, [accounts, instance, router]);
+    }, [router]);
 
     // ── Context value ──────────────────────────────────────────────────────────
 
@@ -207,6 +266,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         status,
         login,
         logout,
+        authError,
+        clearAuthError,
+        retry,
     };
 
     return (

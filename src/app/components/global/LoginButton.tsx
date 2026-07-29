@@ -2,31 +2,33 @@
 
 import React, { useState } from "react";
 import { useUser } from "@/app/components/global/UserInfo";
+import AuthToast from "@/app/components/global/AuthToast";
 import { WsnaFullNameBlue } from "@/app/utils/icons";
 
 export default function LoginButton() {
-  const { user, status, login, logout } = useUser();
+  const { user, status, login, authError, clearAuthError, retry } =
+    useUser();
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleLogin = async (source: "workforce" | "external") => {
     setIsLoading(true);
-    const handleWindowFocus = () => {
-      // Give MSAL 500ms to resolve/reject after the popup closes
-      setTimeout(() => {
-        setIsLoading((current) => {
-          return current ? false : current;
-        });
-      }, 500);
-    };
-
-    window.addEventListener("focus", handleWindowFocus, { once: true });
-
+    const onFocus = () => setTimeout(() => setIsLoading(false), 500);
+    window.addEventListener("focus", onFocus, { once: true });
     try {
-      await login();
+      await login(source);
     } catch {
-      setIsLoading(false);
     } finally {
-      window.removeEventListener("focus", handleWindowFocus);
+      window.removeEventListener("focus", onFocus);
+      setIsLoading(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    setIsLoading(true);
+    try {
+      await retry();
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -65,7 +67,7 @@ export default function LoginButton() {
               Sign in with your WSNA account
             </p>
             <button
-              onClick={handleLogin}
+              onClick={() => handleLogin("workforce")}
               disabled={isAuthInProgress}
               className="
                 inline-flex items-center justify-center gap-2
@@ -90,6 +92,25 @@ export default function LoginButton() {
                 "Sign in"
               )}
             </button>
+
+            {/* Email one-time-passcode entry point - for users without a
+                Microsoft account. Kept visually secondary on purpose so the
+                existing sign-in experience is unchanged. */}
+            <p className="mt-4 text-xs text-[#1f3c5b]">
+              Can't login above?{" "}
+              <button
+                type="button"
+                onClick={() => handleLogin("external")}
+                disabled={isAuthInProgress}
+                className="
+                  underline underline-offset-2 font-medium
+                  hover:opacity-80 transition
+                  disabled:opacity-70 disabled:cursor-not-allowed
+                "
+              >
+                Click here
+              </button>
+            </p>
           </div>
         ) : (
           // User is signed in but auth/membership check is still resolving
@@ -116,6 +137,12 @@ export default function LoginButton() {
           </div>
         )}
       </div>
+
+      <AuthToast
+        error={authError}
+        onRetry={handleRetry}
+        onDismiss={clearAuthError}
+      />
     </div>
   );
 }
