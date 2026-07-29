@@ -10,27 +10,22 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@azure/msal-browser": "^5.5.0",
-    "@azure/msal-react": "^5.0.7",
-    "@vercel/analytics": "^2.0.1",
-    "jose": "^6.2.2",
-    "js-cookie": "^3.0.5",
-    "next": "^16.2.6",
-    "qs": "^6.15.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "@azure/msal-browser": "5.5.0",
+    "@vercel/analytics": "2.0.1",
+    "jose": "6.2.2",
+    "next": "16.2.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
-    "@types/js-cookie": "^3.0.6",
-    "@types/node": "^25",
-    "@types/qs": "^6.15.0",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^10",
+    "@eslint/eslintrc": "3",
+    "@tailwindcss/postcss": "4",
+    "@types/node": "25",
+    "@types/react": "19",
+    "@types/react-dom": "19",
+    "eslint": "10",
     "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "tailwindcss": "4",
+    "typescript": "5"
   }
 }

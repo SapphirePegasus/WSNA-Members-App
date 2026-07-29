@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# WSNA Members App - environment template
+# Never commit .env files.
+#
+# Two identity systems are in play. Do not mix their values:
+#   WORKFORCE tenant (5fe...) - @wsna.org staff, MS personal accounts,
+#                               AND Dataverse (the CRM lives here)
+#   EXTERNAL tenant  (a3b...) - email one-time-passcode users only
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Workforce sign-in (existing users - unchanged behaviour) ─────────────────
+# Client ID of the multi-tenant app registration in the WORKFORCE tenant.
+# Keep as "common" so both @wsna.org and personal Microsoft accounts sign in.
+
+NEXT_PUBLIC_MSAL_CLIENT_ID=82b...
+NEXT_PUBLIC_MSAL_TENANT=common
+NEXT_PUBLIC_MSAL_REDIRECT_URI=http://localhost:3000/redirect
+
+# Server-side only. The concrete workforce tenant GUID (NOT "common").
+# Used by verifyAuth to pin the issuer for @wsna.org tokens.
+
+WORKFORCE_TENANT_ID=5fe...
+
+# ── External sign-in (email one-time passcode) ───────────────────────────────
+# Client ID of the app registration in the EXTERNAL (ciamlogin) tenant.
+# Its redirect URI must be registered under the Single-page application
+# platform, and the app must be attached to a sign-up/sign-in user flow
+# with Email one-time passcode enabled.
+
+NEXT_PUBLIC_EXTERNAL_CLIENT_ID=d5f...
+NEXT_PUBLIC_EXTERNAL_TENANT_ID=a3b...
+NEXT_PUBLIC_EXTERNAL_TENANT_SUBDOMAIN=wsnaapp
+
+# ── Dataverse (CRM - lives in the WORKFORCE tenant) ──────────────────────────
+# These must stay pointed at the workforce tenant regardless of how login
+# works. User login and CRM access are independent trust relationships.
+
+DATAVERSE_URL=https://wsnamembership.api.crm.dynamics.com
+DATAVERSE_TENANT_ID=5fe...
+DATAVERSE_CLIENT_ID=82b...
+DATAVERSE_CLIENT_SECRET=Rd7...
+
+# ── Craft CMS ────────────────────────────────────────────────────────────────
+
+CRAFT_GRAPHQL_TOKEN=bCA...
+NEXT_PUBLIC_WSNA_API_BASE=https://www.wsna.org/actions/graphql/api
+
