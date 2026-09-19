@@ -5,5 +5,11 @@ export default function PagesLayout({
 }: {
     children: React.ReactNode;
 }) {
-    return <AppShell>{children}</AppShell>;
+    return (
+        <AppShell>
+            <div className="min-h-dvh">
+                {children}
+            </div>
+        </AppShell>
+    );
 }

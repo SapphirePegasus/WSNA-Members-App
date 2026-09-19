@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { useUser } from "@/app/components/global/UserInfo";
+import { useMobileMenu } from "@/app/contexts/MobileMenuContext";
 import {
   CrossIcon,
   ProfileIcon,
@@ -10,66 +12,105 @@ import {
   SignOutCrossIcon,
 } from "@/app/utils/icons";
 
-export default function UserMenuMobile() {
-  const [isOpen, setIsOpen] = useState(false);
+export function UserMenuTrigger() {
+  const { open } = useMobileMenu();
+
+  return (
+    <button
+      onClick={open}
+      className="p-2"
+      aria-haspopup="dialog"
+      aria-label="Open account menu"
+    >
+      <ProfileIcon className="w-6 h-6" />
+    </button>
+  );
+}
+
+export function UserMenuPanel() {
+  const { isOpen, close } = useMobileMenu();
   const { user, logout } = useUser();
   const router = useRouter();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
+  if (!isOpen || typeof document === "undefined") return null;
 
   const handleMembership = () => {
-    setIsOpen(false);
+    close();
     router.push("/membership");
   };
 
   const handleLogout = async () => {
-    setIsOpen(false);
+    close();
     await logout();
   };
 
-  return (
-    <>
-      <button onClick={() => setIsOpen(true)} className="p-2">
-        <ProfileIcon className="w-6 h-6" />
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Account menu"
+      className="fixed inset-0 bg-[#FAFAFA] z-50 flex flex-col px-4 pt-safe"
+    >
+      {/* Header */}
+      <div className="flex justify-between items-center py-3">
+        <h2 className="text-2xl font-bold text-foreground">My WSNA</h2>
+        <button
+          ref={closeButtonRef}
+          onClick={close}
+          className="p-2"
+          aria-label="Close account menu"
+        >
+          <CrossIcon className="w-5 h-5" />
+        </button>
+      </div>
+
+      <hr className="border-t border-gray-300 my-6" />
+
+      {/* My Membership row */}
+      <button
+        onClick={handleMembership}
+        className="flex items-center gap-4 w-full text-left"
+      >
+        <span className="flex items-center justify-center w-12 h-12 rounded-lg bg-[#F4F4F5] shrink-0">
+          <MembershipCardIcon className="w-6 h-[18.52px]" />
+        </span>
+        <span className="text-xl font-semibold text-foreground">My membership</span>
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 bottom-16 bg-gray-50 z-50 flex flex-col">
-          {/* Header */}
-          <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200">
-            <h2 className="text-2xl font-bold text-foreground">My WSNA</h2>
-            <button onClick={() => setIsOpen(false)} className="p-2">
-              <CrossIcon className="w-5 h-5" />
-            </button>
-          </div>
+      <hr className="border-t border-gray-300 my-6" />
 
-          {/* My Membership row */}
-          <button
-            onClick={handleMembership}
-            className="flex items-center gap-3 px-4 py-4 border-b border-gray-200 bg-white w-full text-left"
-          >
-            <MembershipCardIcon className="w-6 h-6 shrink-0" />
-            <span className="text-base font-semibold text-foreground">My membership</span>
-          </button>
+      {/* Signed in as */}
+      <div>
+        <p className="text-xs font-medium text-gray-500">Signed in as</p>
+        <p className="text-base font-medium text-foreground mt-1">
+          {user ? user.email : "Please login"}
+        </p>
+      </div>
 
-          {/* Signed in as */}
-          <div className="px-4 py-4 border-b border-gray-200 bg-white">
-            <p className="text-xs text-gray-500">Signed in as</p>
-            <p className="text-sm font-semibold text-foreground mt-0.5">
-              {user ? user.email : "Please login"}
-            </p>
-          </div>
+      <hr className="border-t border-gray-300 my-6" />
 
-          {/* Sign out */}
-          <div className="px-4 py-4 bg-white">
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-sm text-red-500 cursor-pointer"
-            >
-              <SignOutCrossIcon height={18} width={16} />
-              Sign out
-            </button>
-          </div>
-        </div>
-      )}
-    </>
+      {/* Sign out */}
+      <button
+        onClick={handleLogout}
+        className="flex items-center gap-2 text-base text-danger-red cursor-pointer w-fit"
+      >
+        <SignOutCrossIcon className="w-4 h-4" />
+        Sign out
+      </button>
+    </div>,
+    document.body
   );
 }

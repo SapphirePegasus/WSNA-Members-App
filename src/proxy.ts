@@ -18,10 +18,10 @@ import { NextRequest, NextResponse } from "next/server";
 // No external dependencies - uses a module-level Map on the edge runtime.
 //
 // Limits are intentionally conservative for a member portal:
-//   /api/contact        - 10 req/min  (login flow, should be infrequent)
-//   /api/membershiplinks - 30 req/min  (card loads, tab switches)
+//   /api/contact        - 60 req/min  (login flow, should be infrequent)
+//   /api/membershiplinks - 60 req/min  (card loads, tab switches)
 //   /api/resources      - 60 req/min  (resource tabs, cached client-side)
-//   all other /api/*    - 30 req/min  (catch-all for any future routes)
+//   all other /api/*    - 60 req/min  (catch-all for any future routes)
 //
 // Window: 60 seconds sliding
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,12 +37,12 @@ const rateLimitStore = new Map<string, RateLimitEntry>();
 const WINDOW_MS = 60_000; // 60 seconds
 
 const LIMITS: Record<string, number> = {
-    "/api/contact": 10,
-    "/api/membershiplinks": 30,
+    "/api/contact": 60,
+    "/api/membershiplinks": 60,
     "/api/resources": 60,
 };
 
-const DEFAULT_LIMIT = 30;
+const DEFAULT_LIMIT = 60;
 
 // Cleanup entries older than 2 windows to prevent unbounded memory growth.
 // Called on every request - not expensive because Map iteration is O(n) and the
