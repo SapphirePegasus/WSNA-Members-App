@@ -68,57 +68,66 @@ export function UserMenuPanel({ isOpen, onClose }: UserMenuPanelProps) {
       role="dialog"
       aria-modal="true"
       aria-label="Account menu"
-      className="fixed inset-0 bg-[#FAFAFA] z-50 flex flex-col px-4 pt-safe"
+      className="fixed inset-0 z-50 flex flex-col bg-[#FAFAFA]"
     >
-      {/* Header */}
-      <div className="flex justify-between items-center py-3">
+      {/* Status-bar guard: a black-translucent status bar always draws white
+          glyphs, so the area beneath it must be dark, not white. */}
+      <div
+        aria-hidden="true"
+        className="shrink-0 bg-primary"
+        style={{ height: "env(safe-area-inset-top, 0px)" }}
+      />
+
+      {/* Title bar: 48px */}
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-white pl-4">
         <h2 className="text-2xl font-bold text-foreground">My WSNA</h2>
         <button
           type="button"
           ref={closeButtonRef}
           onClick={onClose}
-          className="p-2"
+          className="flex h-12 w-12 items-center justify-center"
           aria-label="Close account menu"
         >
-          <CrossIcon className="w-5 h-5" />
+          <CrossIcon className="h-5 w-5" />
         </button>
       </div>
 
-      <hr className="border-t border-gray-300 my-6" />
-
-      {/* My Membership row */}
-      <button
-        type="button"
-        onClick={handleMembership}
-        className="flex items-center gap-4 w-full text-left"
-      >
-        <span className="flex items-center justify-center w-12 h-12 rounded-lg bg-[#F4F4F5] shrink-0">
-          <MembershipCardIcon className="w-6 h-[18.52px]" />
-        </span>
-        <span className="text-xl font-semibold text-foreground">My membership</span>
-      </button>
-
-      <hr className="border-t border-gray-300 my-6" />
+      {/* My membership: 32px above and below */}
+      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-8">
+        <button
+          type="button"
+          onClick={handleMembership}
+          className="flex w-full items-center gap-4 text-left"
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#F4F4F5]">
+            <MembershipCardIcon className="h-[18.52px] w-6" />
+          </span>
+          <span className="text-xl font-semibold text-foreground">My membership</span>
+        </button>
+      </div>
 
       {/* Signed in as */}
-      <div>
+      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-6">
         <p className="text-xs font-medium text-gray-500">Signed in as</p>
-        <p className="text-base font-medium text-foreground mt-1">
+        <p className="mt-1 text-base font-medium text-foreground">
           {user ? user.email : "Please login"}
         </p>
       </div>
 
-      <hr className="border-t border-gray-300 my-6" />
-
-      {/* Sign out */}
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="flex items-center gap-2 text-base text-danger-red cursor-pointer w-fit"
+      {/* Gray lower area: Sign out sits fully on gray, down to the screen edge */}
+      <div
+        className="flex-1 px-4 pt-6"
+        style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px))" }}
       >
-        <SignOutCrossIcon className="w-4 h-4" />
-        Sign out
-      </button>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex min-h-12 items-center gap-2 text-base text-danger-red"
+        >
+          <SignOutCrossIcon className="h-4 w-4" />
+          Sign out
+        </button>
+      </div>
     </div>,
     document.body
   );
