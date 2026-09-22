@@ -145,13 +145,11 @@ export default function LoginButton() {
 
   const handleLogin = async (source: "workforce" | "external") => {
     setIsLoading(true);
-    const onFocus = () => setTimeout(() => setIsLoading(false), 500);
-    window.addEventListener("focus", onFocus, { once: true });
     try {
+      // On success this never returns - the page navigates away.
       await login(source);
     } catch {
-    } finally {
-      window.removeEventListener("focus", onFocus);
+      // login() already mapped and surfaced the error via authError.
       setIsLoading(false);
     }
   };

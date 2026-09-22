@@ -21,6 +21,8 @@ import {
 import {
     mapAuthError,
     rateLimitedError,
+    AUTH_REDIRECT_ERROR_KEY,
+    getMsalErrorCode,
     type AuthUiError,
 } from "@/app/lib/authErrors";
 import type { ContactRecord } from "@/app/dataverse/contactRepository";
@@ -77,10 +79,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [status, setStatus] = useState<AuthStatus>("initializing");
     const [authError, setAuthError] = useState<AuthUiError | null>(null);
     const lastSourceRef = useRef<AuthSource>("workforce");
-    // True only for the window between an interactive login() call and the
-    // membership check it triggers. Session-restore on mount / reload leaves
-    // this false, so a reload never navigates away from the current URL.
-    const interactiveLoginRef = useRef(false);
 
     const clearAuthError = useCallback(() => setAuthError(null), []);
 
@@ -157,9 +155,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 //     including any ?tab= deep link, is already correct.
                 // consumeRedirectTarget() validates the stored value (same-app
                 // absolute paths only) and clears it in one step.
-                const isOnLoginPage = window.location.pathname === "/";
-                if (interactiveLoginRef.current || isOnLoginPage) {
-                    interactiveLoginRef.current = false;
+
+                // Forward past the login page if a session already exists
+                // here (e.g. retry() succeeding, or a stray reload of "/").
+                // A fresh interactive sign-in never reaches this branch -
+                // /redirect handles that navigation itself, before this
+                // page's UserProvider ever mounts.
+                if (window.location.pathname === "/") {
                     router.replace(consumeRedirectTarget() ?? "/home");
                 }
                 return;
@@ -174,10 +176,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
             sessionStorage.setItem(NOT_A_MEMBER_REASON_KEY, reason);
 
-            // This login attempt is terminating at /not-a-member, so drop any
-            // captured deep link and clear the interactive flag - neither
-            // should survive into a later session.
-            interactiveLoginRef.current = false;
+            // This attempt is terminating at /not-a-member, so drop any
+            // captured deep link - it should not survive into a later
+            // session.
             consumeRedirectTarget();
 
             setUser(null);
@@ -204,27 +205,38 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         void checkMembership();
     }, [checkMembership]);
 
+    // Picks up an error stashed by /redirect (a real identity-provider
+    // failure for a flow we initiated) - a different page mount than the
+    // one that caught it, so sessionStorage is the handoff.
+    useEffect(() => {
+        try {
+            const code = sessionStorage.getItem(AUTH_REDIRECT_ERROR_KEY);
+            if (code) {
+                sessionStorage.removeItem(AUTH_REDIRECT_ERROR_KEY);
+                const mapped = mapAuthError({ errorCode: code });
+                if (mapped) setAuthError(mapped);
+            }
+        } catch {
+            // Non-fatal - sessionStorage unavailable, nothing to recover.
+        }
+    }, []);
+
     // ── Login ──────────────────────────────────────────────────────────────────
 
-    const login = useCallback(
-        async (source: AuthSource = "workforce") => {
-            setAuthError(null);
-            lastSourceRef.current = source;
-            interactiveLoginRef.current = true;
-            try {
-                await authLogin(source);
-            } catch (err: unknown) {
-                console.error("[UserProvider] Login failed:", err);
-                const mapped = mapAuthError(err);
-                if (mapped) setAuthError(mapped);
-                throw err;
-            }
-            // Popup resolved with a signed-in account - run the membership
-            // check explicitly (no msal-react accounts subscription anymore).
-            await checkMembership();
-        },
-        [checkMembership]
-    );
+    const login = useCallback(async (source: AuthSource = "workforce") => {
+        setAuthError(null);
+        lastSourceRef.current = source;
+        try {
+            // Navigates the whole page away on success - nothing after
+            // this line runs in that case. /redirect resumes the flow.
+            await authLogin(source);
+        } catch (err: unknown) {
+            console.error("[UserProvider] Login failed:", err);
+            const mapped = mapAuthError(err);
+            if (mapped) setAuthError(mapped);
+            throw err;
+        }
+    }, []);
 
     // ── Retry ──────────────────────────────────────────────────────────────────
 

@@ -13,7 +13,6 @@ import {
 //
 //   WORKFORCE - https://login.microsoftonline.com/{common}
 //     Existing users: @wsna.org staff and personal Microsoft accounts.
-//     Identical to the pre-External-ID behaviour. Do not change.
 //
 //   EXTERNAL  - https://{subdomain}.ciamlogin.com/{tenant-id}
 //     Entra External ID tenant. Email one-time-passcode sign-in for users
@@ -28,30 +27,29 @@ import {
 // reports its issuer on {tenant-id}.ciamlogin.com. MSAL validates the
 // issuer host against this list - with only the subdomain present, login
 // aborts with endpoints_resolution_error / issuer_validation_failed.
+//
+// Note on navigateToLoginRequestUrl: in @azure/msal-browser v4+ (we're on
+// v5.5.0) this is no longer part of BrowserAuthOptions here - it moved to
+// a parameter on handleRedirectPromise() itself. See authClient.ts
+// (resumeSession), where it's set to false for the same reason it would
+// have lived here in v3: both flows use loginRedirect, always initiated
+// from "/", and MSAL's default is to silently navigate the SPA back to
+// that URL once handleRedirectPromise() resolves - which would fight our
+// own redirect/page.tsx navigation to the deep-link target or /home.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// `satisfies` forces excess-property checking on this literal, so a
-// mistyped or removed MSAL option name fails compilation instead of being
-// silently ignored at runtime. (windowHashTimeout, the v3/v4 name for the
-// popup timeout, was removed in msal-browser v5 - exactly the failure mode
-// this annotation exists to catch.)
 const sharedCacheAndSystem = {
   cache: {
     cacheLocation: "sessionStorage" as const,
   },
   system: {
-    // How long MSAL waits for the popup's response (via the redirect-bridge
-    // BroadcastChannel) before failing the login. The v5 default is 60_000ms
-    // (DEFAULT_POPUP_TIMEOUT_MS) - too short for email one-time-passcode
-    // flows, where the user has to switch to their inbox, wait for the
-    // code, and type it. 5 minutes is realistic. The silent-iframe timeout
-    // (iframeBridgeTimeout, default 10s) is intentionally left alone.
-    popupBridgeTimeout: 300_000,
     loggerOptions: {
       loggerCallback: () => { },
       piiLoggingEnabled: false,
     },
   },
+  // `satisfies` forces excess-property checking on this literal, so a
+  // mistyped or unsupported MSAL option name fails compilation instead of
+  // being silently ignored at runtime.
 } satisfies Pick<Configuration, "cache" | "system">;
 
 export function getWorkforceMsalConfig(): Configuration {
@@ -89,4 +87,3 @@ export const loginRequest = {
   scopes: ["openid", "profile", "email"],
   prompt: "select_account" as const,
 };
-
