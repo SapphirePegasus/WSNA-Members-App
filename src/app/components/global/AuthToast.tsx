@@ -14,7 +14,7 @@ import type { AuthUiError } from "@/app/lib/authErrors";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const AUTO_DISMISS_MS = 8000;
-const PERSISTENT_KINDS = new Set(["timeout", "rate-limited"]);
+const PERSISTENT_KINDS = new Set(["timeout", "rate-limited", "redirect-failed"]);
 
 interface AuthToastProps {
     error: AuthUiError | null;

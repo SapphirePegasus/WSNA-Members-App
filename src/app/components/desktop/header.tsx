@@ -14,7 +14,7 @@ export default function HeaderPC() {
   ];
 
   return (
-    <nav className="hidden md:block sticky top-0 w-full bg-primary border-b border-gray-300">
+    <nav className="hidden md:block sticky top-0 w-full bg-primary border-b border-gray-300 pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between">
         <Link href="/home" className="text-2xl font-extrabold mr-8 text-white">
           My WSNA

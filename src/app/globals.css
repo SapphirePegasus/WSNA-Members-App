@@ -8,6 +8,7 @@
   --primary-100: #F0F7FF;
   --primary-300: #59A6FD;
   --primary-500: #004c97;
+  --danger-red: #DA291C;
   --font-graphik: "Graphik Compact Web", Arial;
   --font-graphikcompact: "Graphik Compact Web", Arial;
   --font-graphik: "Graphik Web", Arial;
@@ -21,6 +22,7 @@
   --color-primary-100: var(--primary-100);
   --color-primary-300: var(--primary-300);
   --color-primary-500: var(--primary-500);
+  --color-danger-red: var(--danger-red);
   --font-sans: var(--font-graphikcompact);
 }
 

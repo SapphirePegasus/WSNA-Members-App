@@ -1,23 +1,24 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Auth error mapping - single place that translates raw errors (MSAL popup
-// errors, fetch/network failures, rate-limit responses) into typed,
-// user-friendly messages.
+// Auth error mapping - single place that translates raw errors (MSAL
+// redirect-flow errors, fetch/network failures, rate-limit responses) into
+// typed, user-friendly messages.
 //
 // Rules:
 //   - Raw error detail is for the console (developers). Users only ever see
 //     the friendly message - never error codes, stack traces, or internals.
-//   - A `null` return means "stay silent": the user cancelled on purpose,
-//     and nagging them with a toast would be worse UX than saying nothing.
+//   - A `null` return means "stay silent": the user backed out on purpose
+//     (e.g. declined on the identity provider's page), and nagging them
+//     with a toast would be worse UX than saying nothing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type AuthErrorKind =
-    | "popup-blocked"
     | "timeout"
     | "network"
     | "rate-limited"
     | "in-progress"
+    | "redirect-failed"
     | "unknown";
 
 export interface AuthUiError {
@@ -27,8 +28,17 @@ export interface AuthUiError {
     retryAfterSec?: number;
 }
 
-// MSAL surfaces errors with a string errorCode property (BrowserAuthError).
-function getMsalErrorCode(err: unknown): string | null {
+// sessionStorage key redirect/page.tsx writes to when the identity provider
+// (or our own redirect-handling code) reports a real failure for a flow we
+// initiated. UserInfo.tsx reads and clears it once on mount - the page that
+// receives the error (the login page) is a different mount than the one
+// that caught it (/redirect), so sessionStorage is the handoff.
+export const AUTH_REDIRECT_ERROR_KEY = "wsna.auth.redirectErrorCode";
+
+// MSAL surfaces errors with a string errorCode property (BrowserAuthError /
+// ServerError). Exported so redirect/page.tsx can extract the same code it
+// stashes for UserInfo.tsx to map, without duplicating this logic.
+export function getMsalErrorCode(err: unknown): string | null {
     if (typeof err === "object" && err !== null && "errorCode" in err) {
         const code = (err as { errorCode: unknown }).errorCode;
         return typeof code === "string" ? code : null;
@@ -51,24 +61,16 @@ export function mapAuthError(err: unknown): AuthUiError | null {
 
     switch (code) {
         case "user_cancelled":
-            // The user closed the popup themselves - intentional, stay silent.
+        case "access_denied":
+            // The user backed out or declined on the identity provider's
+            // page - intentional, stay silent.
             return null;
 
-        case "popup_window_error":
-        case "empty_window_error":
-            return {
-                kind: "popup-blocked",
-                message:
-                    "Your browser blocked the sign-in window. " +
-                    "Please allow popups for this site and try again.",
-            };
-
+        // MSAL still uses a hidden iframe for silent token renewal
+        // (acquireTokenSilent) regardless of the interactive method, so
+        // these can still occur even though interactive sign-in no longer
+        // uses a popup or monitored window.
         case "monitor_window_timeout":
-            return {
-                kind: "timeout",
-                message: "Sign-in timed out. Please try again.",
-            };
-
         case "timed_out":
             return {
                 kind: "timeout",
@@ -79,8 +81,22 @@ export function mapAuthError(err: unknown): AuthUiError | null {
             return {
                 kind: "in-progress",
                 message:
-                    "A sign-in window is already open. " +
-                    "Finish or close it, then try again.",
+                    "A sign-in is already in progress. Please wait a moment, or refresh the page and try again.",
+            };
+
+        // The temporary request state MSAL writes to sessionStorage before
+        // navigating to the identity provider (nonce, PKCE verifier,
+        // request state) couldn't be found or didn't match on return. Most
+        // commonly caused by the browser clearing storage mid-sign-in, or
+        // completing the round trip in a different tab.
+        case "no_token_request_cache_error":
+        case "state_mismatch":
+        case "nonce_mismatch":
+        case "no_cached_authority_error":
+            return {
+                kind: "redirect-failed",
+                message:
+                    "We couldn't complete your sign-in. Please try again without switching tabs or apps during the process.",
             };
 
         default:

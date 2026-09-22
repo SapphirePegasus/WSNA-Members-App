@@ -1,9 +1,10 @@
-import AppShell from "@/app/components/global/AppShell";
+import { UserProvider } from "@/app/components/global/UserInfo";
 
 export default function PagesLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    return <AppShell>{children}</AppShell>;
+    return <UserProvider>{children}</UserProvider>;
 }
+

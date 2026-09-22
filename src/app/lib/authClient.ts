@@ -20,6 +20,13 @@ import {
 // came from ("auth source") in sessionStorage - the same lifetime as MSAL's
 // own sessionStorage token cache, so the two can never outlive each other.
 //
+// Sign-in and sign-out both use full-page redirect (loginRedirect /
+// logoutRedirect), not popups: iOS home-screen-installed PWAs run in
+// WKWebView, which does not reliably support window.open() as a real popup
+// - it is frequently blocked outright or breaks the user out of the
+// installed app into Safari. Redirect never opens a second window, so it
+// behaves the same in a browser tab, an installed PWA, and Android.
+//
 // Every other module (UserProvider, getIdToken) goes through this file.
 // Nothing else in the app may construct a PublicClientApplication.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,22 +115,26 @@ export async function getActiveSession(): Promise<ActiveSession | null> {
     return null;
 }
 
-// ── Login / logout / teardown ────────────────────────────────────────────────
+// ── Login / logout ───────────────────────────────────────────────────────────
+// Both navigate the whole page away - callers should treat the returned
+// promise as "kicked off", not "completed". The app resumes on /redirect.
 
 export async function login(source: AuthSource): Promise<void> {
     const client = await getClient(source);
-    // Match previous behaviour: clear any stale cached state on this client
-    // before an interactive login so the account picker starts clean.
+    // Clear any stale cached state on this client before an interactive
+    // login so the account picker always starts clean.
     await client.clearCache();
-    await client.loginPopup(loginRequest);
+    // Must be written before loginRedirect() navigates away - nothing
+    // after that call is guaranteed to run.
     writeStoredSource(source);
+    await client.loginRedirect(loginRequest);
 }
 
 export async function logout(): Promise<void> {
     const session = await getActiveSession();
     clearStoredSource();
     if (!session) return;
-    await session.client.logoutPopup({
+    await session.client.logoutRedirect({
         account: session.account,
         postLogoutRedirectUri: "/redirect",
     });
@@ -137,6 +148,44 @@ export async function clearSession(): Promise<void> {
     if (!session) return;
     await session.client.clearCache();
     session.client.setActiveAccount(null);
+}
+
+// ── Redirect resumption ──────────────────────────────────────────────────────
+// Called exactly once, from /redirect, after the browser returns from the
+// identity provider (login or logout). Resolves the pending redirect
+// response (if any) against the client that initiated it, then reports
+// whatever session exists afterwards.
+//
+// Throws only when the identity provider reported a real failure for a
+// flow *we* initiated (stored source present) - the caller maps that to a
+// user-facing message. A direct hit on /redirect with no pending flow (or
+// a logout return, where our stored source is cleared before navigating)
+// is not an error: both clients are probed best-effort and any failure
+// there is merely logged.
+export async function resumeSession(): Promise<{ session: ActiveSession | null }> {
+    const stored = readStoredSource();
+
+    if (stored) {
+        const client = await getClient(stored);
+        const result = await client.handleRedirectPromise({ navigateToLoginRequestUrl: false, });
+        if (result?.account) {
+            client.setActiveAccount(result.account);
+        }
+    } else {
+        for (const source of ["workforce", "external"] as const) {
+            try {
+                const client = await getClient(source);
+                await client.handleRedirectPromise({ navigateToLoginRequestUrl: false, });
+            } catch (err) {
+                console.error(
+                    `[authClient] handleRedirectPromise failed for ${source}:`,
+                    err
+                );
+            }
+        }
+    }
+
+    return { session: await getActiveSession() };
 }
 
 // ── Token acquisition ────────────────────────────────────────────────────────
