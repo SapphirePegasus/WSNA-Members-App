@@ -1,0 +1,81 @@
+@import "tailwindcss";
+@import "./fonts.css";
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --primary: #0057b8;
+  --primary-100: #F0F7FF;
+  --primary-300: #59A6FD;
+  --primary-500: #004c97;
+  --danger-red: #DA291C;
+  --font-graphik: "Graphik Compact Web", Arial;
+  --font-graphikcompact: "Graphik Compact Web", Arial;
+  --font-graphik: "Graphik Web", Arial;
+  --font-produkt: "Produkt Web", Arial;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-100: var(--primary-100);
+  --color-primary-300: var(--primary-300);
+  --color-primary-500: var(--primary-500);
+  --color-danger-red: var(--danger-red);
+  --font-sans: var(--font-graphikcompact);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SAFE AREA UTILITIES
+   Consumed by fixed bottom navigation to push content above the OS gesture
+   bar on iPhone X+ and Android gesture-nav devices.
+
+   Requires viewport-fit=cover in the viewport meta tag (set in layout.tsx
+   via the Next.js Viewport export) — without it, env(safe-area-inset-bottom)
+   always resolves to 0 on iOS, making these utilities have no effect.
+
+   pb-safe: padding-bottom that is at minimum the standard value, but grows
+   to accommodate the OS gesture inset when one is present. The max() ensures
+   devices without a gesture bar still receive normal padding.
+
+   mb-safe: margin-bottom equivalent for cases where padding is not
+   appropriate (e.g. absolutely positioned elements needing clearance).
+   ───────────────────────────────────────────────────────────────────────────── */
+@utility pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+
+@utility pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SCROLLBAR UTILITY
+   ───────────────────────────────────────────────────────────────────────────── */
+@utility scrollbar-hidden {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  --primary: #0057b8;
+  --primary-100: #F0F7FF;
+  --primary-300: #59A6FD;
+  --primary-500: #004c97;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-graphikcompact);
+  font-weight: 400;
+  font-style: normal;
+}
