@@ -5,6 +5,7 @@ import { useUser } from "@/app/components/global/UserInfo";
 import AuthToast from "@/app/components/global/AuthToast";
 import { WsnaFullNameBlue, MicrosoftIcon } from "@/app/utils/icons";
 import { clearStaleInteractionStatus, type AuthSource } from "@/app/lib/authClient";
+import { useStandaloneViewportGap } from "@/app/hooks/useStandaloneViewportGap";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DISCLOSURE ICONS
@@ -49,23 +50,9 @@ function DisclosureMinusIcon(props: React.SVGProps<SVGSVGElement>) {
 // the two disclosures are independent per the approved design (opening one
 // never affects the other). Follows the dl > dt > button, then dd structure
 // required by the design handoff, with the native `hidden` attribute doing
-// the show/hide work - no animation, no height measurement, nothing to get
-// wrong.
+// the show/hide work - no animation, no height measurement. If needed make 
+// this a separate component to use somewhere else. 
 //
-// SIZING NOTE: the outer row spacing (pb-4 / pt-4) and the trigger's min-h-11
-// (44px touch target) and the answer's text-base/leading-6 are taken verbatim
-// from the developer handoff export (DH-05) - these are NOT adjusted for the
-// "too big" pass below, because DH-05 states them as literal, required
-// values. Only the question label's font size (not specified in DH-05) was
-// reduced to match the more compact card.
-//
-// Accessibility, per DH-05:
-//   - Entire labeled row is a native <button>, not just the circular icon.
-//   - Unique aria-controls / matching id on the answer.
-//   - aria-expanded toggles false/true.
-//   - Closed answer is removed from layout, focus order, and the
-//     accessibility tree via the native `hidden` attribute.
-//   - Minimum 44px trigger row (min-h-11) - never reduced for visual density.
 // ─────────────────────────────────────────────────────────────────────────────
 interface DisclosureItemProps {
     id: string;
@@ -115,41 +102,25 @@ function DisclosureItem({ id, question, className, children }: DisclosureItemPro
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOGIN PAGE CONTENT
-// MOB-06 - approved two-method sign-in chooser. Both methods are presented
-// as equally legitimate; neither is troubleshooting. See:
-//   03-My-WSNA-Login-Design-Handoff.md
 //
-// LAYOUT: full-bleed flex column (wordmark row -> centered card -> footer),
-// matching the structure the previous LoginButton.tsx used for the wordmark
-// specifically - NOT nested inside a max-w-6xl content wrapper. That nested
-// wrapper was the root cause of the wordmark appearing indented with extra
-// padding on both sides; removing it restores the original, correct
-// positioning while keeping the new card content.
-//
-// SIZING: card width and page typography are intentionally smaller than the
-// first pass. DH-05 only mandates literal sizing for the disclosure item's
-// internals (kept unchanged above) - it does not specify a page container
-// width or a heading type scale, so those were this author's own read of
-// the mockup. Per explicit direction, both are now reduced to conventional,
-// industry-standard values (max-w-md card, Tailwind's standard type scale
-// instead of one-off arbitrary pixel values) rather than the earlier,
-// oversized interpretation.
+// Minor changes are made to the size and layout so that its responsive and
+// looks equally good on all devices. The design handoff did not have any 
+// responsive typography rules so the developer has chosen industry standard
+// sizing and layout rules and applied here. If needed these can be updated
+// in future.
 //
 // Layout is a normal scrollable document (min-h-dvh, no `fixed` positioning)
 // so expanded disclosure content pushes the footer down and scrolls, rather
-// than being clipped by a fixed-height overlay - this was a structural
-// requirement in the handoff ("The login shell scrolls when expanded content
-// exceeds the viewport. Content never clips or overlays the footer.").
-//
-// Auth wiring is unchanged from the previous LoginButton.tsx: both buttons
-// call the same login(source) from useUser(), which already uses MSAL's
-// redirect flow end-to-end (see authClient.ts) - no popups anywhere.
+// than being clipped by a fixed-height overlay.
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LoginPageContent() {
     const { user, status, login, authError, clearAuthError, retry } = useUser();
 
-    // Tracks which specific method is mid-flight so only the clicked button
-    // shows a spinner - the other stays visibly disabled, not also "loading".
+    // PWA-01: extends the shell to the full screen on cold launch of the
+    // installed iOS app, where WebKit reports a viewport that is short by the
+    // top safe-area inset. No-op everywhere else.
+    useStandaloneViewportGap();
+
     const [loadingSource, setLoadingSource] = useState<AuthSource | null>(null);
     const isLoggingIn = loadingSource !== null;
 
@@ -166,20 +137,7 @@ export default function LoginPageContent() {
     // signal for "this page just came back from bfcache" (as opposed to a
     // fresh load, where React state would already start at its default and
     // this handler is a no-op).
-    //
-    // Two things need resetting when that happens:
-    //   1. Our own loading state (the visible symptom).
-    //   2. MSAL's own "an interaction is in progress" flag. clearCache()
-    //      does not clear this - per MSAL's caching docs, "interaction
-    //      status" is an ephemeral/temporary cache entry, distinct from the
-    //      tokens/accounts clearCache() clears - so without step 2, the
-    //      user's next click could throw interaction_in_progress even
-    //      though nothing is actually in flight. See clearStaleInteractionStatus
-    //      in authClient.ts for the full rationale.
-    //
-    // Scoped to this page only: it's the only place in the app that ever
-    // initiates an interactive redirect, so there's no risk of this firing
-    // somewhere a real interaction is genuinely still in progress.
+
     useEffect(() => {
         function handlePageShow(event: PageTransitionEvent) {
             if (!event.persisted) return;
@@ -202,9 +160,6 @@ export default function LoginPageContent() {
         }
     };
 
-    // Unchanged branch (per instruction): user exists, membership check
-    // still resolving. isAuthInProgress here covers that state's own
-    // spinner, independent of the sign-in chooser's per-button loading.
     const [isRetrying, setIsRetrying] = useState(false);
     const handleRetry = async () => {
         setIsRetrying(true);
@@ -217,12 +172,10 @@ export default function LoginPageContent() {
     const isAuthInProgress = isRetrying || status === "loading";
 
     return (
-        <div className="flex min-h-dvh w-full flex-col overflow-y-auto bg-[url('/background.svg')] bg-cover bg-center bg-no-repeat">
-            {/* Wordmark - full-bleed, top-left on desktop, centered on mobile.
-                Height (h-6) matches the previous implementation exactly.
-                Horizontal margin reduced from the previous mx-8 to mx-6, and
-                the nested max-w-6xl wrapper that was double-indenting it has
-                been removed entirely. */}
+        <div
+            className="flex w-full flex-col overflow-y-auto bg-[url('/background.svg')] bg-cover bg-center bg-no-repeat"
+            style={{ minHeight: "calc(100dvh + var(--standalone-vh-gap, 0px))" }}
+        >
             <div
                 className="mx-6 mb-6 flex justify-center md:justify-start"
                 style={{ paddingTop: "max(2rem, calc(env(safe-area-inset-top, 0px) + 1rem))" }}
