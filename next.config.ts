@@ -70,6 +70,17 @@ const serviceWorkerHeaders = [
   },
 ];
 
+// CACHE-01: protected API responses - success AND error - must never be
+// stored by a browser cache, CDN or shared proxy. `private` forbids shared
+// caches; `no-store` forbids any cache. This is also set in proxy.ts and in
+// the resources route so the policy does not depend on a single layer.
+const apiCacheHeaders = [
+  {
+    key: "Cache-Control",
+    value: "private, no-store",
+  },
+];
+
 const BUILD_TIMESTAMP = Date.now().toString();
 
 const nextConfig: NextConfig = {
@@ -86,6 +97,11 @@ const nextConfig: NextConfig = {
             value: BUILD_TIMESTAMP,
           },
         ],
+      },
+      // API routes — never cacheable by browser, CDN or shared proxy (CACHE-01)
+      {
+        source: "/api/:path*",
+        headers: apiCacheHeaders,
       },
       // All other routes get security headers
       {
