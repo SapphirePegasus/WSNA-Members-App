@@ -12,12 +12,25 @@ import {
 // Error handling:
 //   - Raw error response bodies are never logged in full
 //   - Only the HTTP status code and a sanitized error code are logged
+//   - The request path is logged WITHOUT its query string or record keys,
+//     because filters carry member emails and keys carry CRM GUIDs (PRIV-01)
 //   - The full error detail is captured but stored separately from the
 //     message that propagates up the call stack
 //   - This prevents internal schema details leaking into log aggregators
 // ─────────────────────────────────────────────────────────────────────────────
 
 let cachedToken: { accessToken: string; expiresAt: number } | null = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATH FOR LOG (PRIV-01)
+// Drops the query string (OData $filter values contain member emails) and
+// replaces parenthesised record keys, e.g. contacts(<guid>), so neither
+// personal data nor CRM identifiers reach the log aggregator. What remains
+// (table and operation) is enough for operations to triage.
+// ─────────────────────────────────────────────────────────────────────────────
+function pathForLog(path: string): string {
+    return path.split("?")[0].replace(/\([^)]*\)/g, "(redacted)");
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SANITIZE DATAVERSE ERROR
@@ -180,9 +193,10 @@ export async function callDataverse(path: string, init?: RequestInit) {
     if (!res.ok) {
         const { code, fullDetail } = await sanitizeDataverseError(res);
 
-        // Log only the error code - never the full OData error body in production
+        // Log only the error code and a redacted path (PRIV-01) - never the
+        // query string, record keys, or the full OData error body.
         console.error(
-            `[dataverse] API error - status: ${res.status}, code: ${code}, path: ${path}`
+            `[dataverse] API error - status: ${res.status}, code: ${code}, path: ${pathForLog(path)}`
         );
 
         // In development, log full detail to aid debugging

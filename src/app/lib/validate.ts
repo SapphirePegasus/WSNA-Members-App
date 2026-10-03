@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+    isReleasedResourceSection,
+    type ReleasedResourceSection,
+} from "@/config/resourceSections";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lightweight request validation.
@@ -127,18 +131,28 @@ export async function parseMembershipLinksRequest(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RESOURCES SECTION PARAM
+// RESOURCES SECTION PARAM (API-01)
+//
+// Two gates, in order:
+//   1. Shape  - cheap regex rejects malformed input outright.
+//   2. Policy - the handle must be in the released-sections registry
+//               (src/config/resourceSections.ts), so unreleased or invented
+//               handles never reach Craft.
+//
+// Both failures return the SAME message so a caller cannot distinguish
+// "malformed" from "valid but unreleased" and enumerate which handles exist.
+// The success type is the narrowed ReleasedResourceSection, not string.
 // ─────────────────────────────────────────────────────────────────────────────
 const SECTION_PATTERN = /^[a-zA-Z0-9_]{1,100}$/;
 
 export function validateSectionParam(
     section: string | null | undefined
-): ValidationResult<string> {
+): ValidationResult<ReleasedResourceSection> {
     if (!section) {
         return fail("Missing required query parameter: section");
     }
-    if (!SECTION_PATTERN.test(section)) {
-        return fail("Invalid section parameter format");
+    if (!SECTION_PATTERN.test(section) || !isReleasedResourceSection(section)) {
+        return fail("Invalid section parameter");
     }
     return { data: section, error: null };
 }

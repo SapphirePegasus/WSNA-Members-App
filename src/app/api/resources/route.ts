@@ -8,8 +8,15 @@ import { getCraftToken, getWsnaApiBase } from "@/app/lib/env";
 //const GRAPHQL_URL = process.env.NEXT_PUBLIC_WSNA_API_BASE!;
 //const TOKEN = process.env.CRAFT_GRAPHQL_TOKEN!;
 
-// The browser and CDN may cache this response for 5 minutes.
-const CACHE_MAX_AGE_SECONDS = 300;
+// Server-side only: how long Next.js may reuse the Craft GraphQL response in
+// its own Data Cache. This is NOT sent to clients. Responses from this route
+// are never cacheable by browsers, CDNs or shared proxies (CACHE-01).
+const CRAFT_REVALIDATE_SECONDS = 300;
+
+// CACHE-01: protected responses - success and error - are private and
+// non-storable. Also enforced in next.config.ts and proxy.ts; set here so this
+// endpoint does not depend on those layers alone.
+const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GRAPHQL QUERY
@@ -62,9 +69,10 @@ async function fetchResourceTopics(section: string): Promise<RawTopicEntry[]> {
       query: RESOURCES_QUERY,
       variables: { section: [section] },
     }),
-    // Next.js fetch cache - revalidates server-side every CACHE_MAX_AGE_SECONDS.
-    // This is separate from the HTTP Cache-Control header sent to the client.
-    next: { revalidate: CACHE_MAX_AGE_SECONDS },
+    // Next.js Data Cache - revalidates server-side every
+    // CRAFT_REVALIDATE_SECONDS. Unrelated to the Cache-Control header sent
+    // to clients, which is always private, no-store.
+    next: { revalidate: CRAFT_REVALIDATE_SECONDS },
   });
 
   if (!response.ok) {
@@ -121,11 +129,12 @@ async function fetchResourceTopics(section: string): Promise<RawTopicEntry[]> {
 // GET /api/resources?section=appResourceTopics_Growth
 //
 // Query params:
-//   section (required) - the Craft CMS section handle to query.
+//   section (required) - a released Craft CMS section handle (API-01).
 //
-// Responses:
-//   200 - ResourcesApiResponse JSON with cache headers
-//   400 - missing or invalid section param
+// Responses (all carry Cache-Control: private, no-store - CACHE-01):
+//   200 - ResourcesApiResponse JSON
+//   400 - missing or invalid/unreleased section param
+//   401 - missing or invalid credential
 //   500 - upstream Craft CMS error
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -154,19 +163,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(body, {
       status: 200,
-      headers: {
-        // Instruct the browser to treat this as fresh for CACHE_MAX_AGE_SECONDS,
-        // then serve stale while revalidating in the background (stale-while-revalidate).
-        // This means users almost never wait for a network round-trip on repeat visits.
-        "Cache-Control": `public, max-age=${CACHE_MAX_AGE_SECONDS}, stale-while-revalidate=${CACHE_MAX_AGE_SECONDS * 2}`,
-      },
+      headers: NO_STORE_HEADERS,
     });
   } catch (error) {
     console.error("[resources/route] Failed to fetch resource topics:", error);
 
     return NextResponse.json(
       { error: "Failed to load resources. Please try again later." },
-      { status: 500 }
+      { status: 500, headers: NO_STORE_HEADERS }
     );
   }
 }

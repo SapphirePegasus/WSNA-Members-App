@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 // Edge middleware a.k.a proxy - runs before every matched request.
 // Responsibilities:
 //   1. Rate limiting on API routes
+//   2. Cache-Control: private, no-store on API responses generated or passed
+//      through here (CACHE-01)
 //
 // MSAL note: MSAL authentication is handled client-side via AuthGuard
 // components and server-side via verifyAuth in individual API routes.
@@ -11,6 +13,10 @@ import { NextRequest, NextResponse } from "next/server";
 // have access to the full Node.js crypto APIs that jose requires in all
 // environments. Auth belongs in the route handlers.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// CACHE-01: every API response must be uncacheable by browsers, CDNs and
+// shared proxies. Mirrors next.config.ts and the resources route.
+const NO_STORE = "private, no-store";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RATE LIMITER
@@ -126,6 +132,7 @@ export function proxy(req: NextRequest): NextResponse {
             {
                 status: 429,
                 headers: {
+                    "Cache-Control": NO_STORE,
                     "Retry-After": String(Math.ceil(resetInMs / 1000)),
                     "X-RateLimit-Limit": String(LIMITS[pathname] ?? DEFAULT_LIMIT),
                     "X-RateLimit-Remaining": "0",
@@ -139,6 +146,7 @@ export function proxy(req: NextRequest): NextResponse {
 
     // Pass through with rate limit headers so clients can self-throttle
     const response = NextResponse.next();
+    response.headers.set("Cache-Control", NO_STORE);
     response.headers.set(
         "X-RateLimit-Limit",
         String(LIMITS[pathname] ?? DEFAULT_LIMIT)

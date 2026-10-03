@@ -1,4 +1,5 @@
 import { callDataverse } from "./dataverseClient";
+import { buildODataEqFilter } from "./odata";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MEMBERSHIP TYPE CLASSIFICATION
@@ -88,6 +89,10 @@ const CONTACT_EXPAND = [
 ].join(",");
 
 const FACILITY_ACCOUNT_TYPE = 551050000;
+
+// Practical maximum length of an email address (RFC 5321). Anything longer
+// cannot be a real address, so it is rejected before any query is built.
+const EMAIL_MAX_LENGTH = 254;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ContactRecord
@@ -211,22 +216,32 @@ export type GetContactResult = ContactRecord | null | "unrecognized";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // getContactByEmail
+//
+// DATA-01: the email is OData-escaped (apostrophes doubled) and then
+// URI-encoded inside buildODataEqFilter - two separate layers, one helper.
+//
+// NOTE (REVIEW-06): $top=1 is intentionally unchanged here. Duplicate
+// detection (query $top=2, fail closed on >1 match) is a separate ticket
+// that depends on the Dataverse owner's answer on email uniqueness.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function getContactByEmail(
     email: string
 ): Promise<GetContactResult> {
     const normalizedEmail = email.trim().toLowerCase();
-    const encodedEmail = encodeURIComponent(normalizedEmail);
 
-    const select = CONTACT_SELECT;
-    const expand = CONTACT_EXPAND;
-    const filter = `emailaddress1%20eq%20%27${encodedEmail}%27`;
+    // A token-derived address that is empty or impossibly long is treated as
+    // "no record" without querying Dataverse.
+    if (normalizedEmail === "" || normalizedEmail.length > EMAIL_MAX_LENGTH) {
+        return null;
+    }
+
+    const filter = buildODataEqFilter("emailaddress1", normalizedEmail);
 
     const path =
         `/api/data/v9.2/contacts` +
-        `?$select=${select}` +
+        `?$select=${CONTACT_SELECT}` +
         `&$filter=${filter}` +
-        `&$expand=${expand}` +
+        `&$expand=${CONTACT_EXPAND}` +
         `&$top=1`;
 
     const data = await callDataverse(path);
