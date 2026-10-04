@@ -45,3 +45,10 @@ DATAVERSE_CLIENT_SECRET=Rd7...
 CRAFT_GRAPHQL_TOKEN=bCA...
 NEXT_PUBLIC_WSNA_API_BASE=https://www.wsna.org/actions/graphql/api
 
+# ── Eligibility proof (server-side only) ─────────────────────────────────────
+# Signs the short-lived "this member passed the Dataverse check" cookie.
+# Minimum 32 characters. Generate with:  openssl rand -base64 48
+# Use a DIFFERENT value for Production and Preview. NEVER prefix with
+# NEXT_PUBLIC_. Rotating it only costs each active user one fresh lookup.
+
+ELIGIBILITY_PROOF_SECRET=generate-with-openssl-rand-base64-48
