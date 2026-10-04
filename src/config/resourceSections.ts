@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Registry of Craft CMS section handles the resources endpoint may serve.
+// Add a handle ONLY when its consuming feature is approved for release.
+// ─────────────────────────────────────────────────────────────────────────────
 export const RELEASED_RESOURCE_SECTIONS = [
     "appResourceTopics_Growth",
     "appResourceTopics_Membership",

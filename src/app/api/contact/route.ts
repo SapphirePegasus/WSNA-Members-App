@@ -1,57 +1,48 @@
-import { NextResponse } from "next/server";
-import { getContactByEmail } from "@/app/dataverse/contactRepository";
-import { verifyAuth, VerifyAuthError } from "@/app/lib/verifyAuth";
+import type { NextRequest } from "next/server";
+import { authorizeContactLookup } from "@/app/lib/authorizeMember";
+import {
+  clearEligibilityCookie,
+  internalErrorResponse,
+  jsonNoStore,
+} from "@/app/lib/apiResponse";
+import { logSafeError } from "@/app/lib/safeLog";
 
-export async function POST(req: Request) {
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/contact
+//
+// The authoritative eligibility check. authorizeContactLookup runs the whole
+// pipeline (identity token, per-identity rate limit, Dataverse lookup) and
+// returns one of three outcomes:
+//
+//   rejected - 401 / 429 / 503 / 500, already built. A Dataverse OUTAGE is a
+//              503, never "not a member".
+//   denied   - authenticated but not eligible:
+//                not-registered → no usable contact row for this email
+//                unrecognized   → contact found but membertype/status matches
+//                                 no recognised category
+//              The `reason` never exposes Dataverse field names, GUIDs or
+//              status codes. Any proof cookie is cleared.
+//   eligible - contact record returned and a fresh eligibility proof cookie
+//              is set for the Craft-backed routes.
+//
+// The response contract (found / reason / contact) is unchanged, so the client
+// needs no change.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function POST(req: NextRequest) {
   try {
-    // ── Auth guard ────────────────────────────────────────────────────────
-    let email: string;
-    try {
-      email = await verifyAuth(req);
-    } catch (err) {
-      if (err instanceof VerifyAuthError) {
-        return NextResponse.json(
-          { error: err.message },
-          { status: err.status }
-        );
-      }
-      return NextResponse.json(
-        { error: "Authentication failed" },
-        { status: 401 }
+    const auth = await authorizeContactLookup(req);
+
+    if (auth.kind === "rejected") return auth.response;
+
+    if (auth.kind === "denied") {
+      return clearEligibilityCookie(
+        jsonNoStore({ found: false, reason: auth.reason })
       );
     }
 
-    // ── Query Dataverse ───────────────────────────────────────────────────
-    const result = await getContactByEmail(email);
-
-    // ── Handle all three outcomes explicitly ──────────────────────────────
-    //
-    // null          → no contact row found for this email
-    // "unrecognized"→ contact found but membertype/status matches no
-    //                 recognised category — treated as access denied,
-    //                 distinct reason surfaced so the client can show
-    //                 appropriate messaging without knowing internal details
-    // ContactRecord → contact found and classified, safe to return
-    //
-    // The `reason` field is intentionally generic — it never exposes
-    // internal Dataverse field names, GUIDs, or status codes to the client.
-    // ─────────────────────────────────────────────────────────────────────
-
-    if (result === null) {
-      return NextResponse.json({ found: false, reason: "not-registered" });
-    }
-
-    if (result === "unrecognized") {
-      return NextResponse.json({ found: false, reason: "unrecognized" });
-    }
-
-    return NextResponse.json({ found: true, contact: result });
-
+    return auth.applyProof(jsonNoStore({ found: true, contact: auth.contact }));
   } catch (err) {
-    console.error("[/api/contact] Unexpected error:", err);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    logSafeError("api/contact", err);
+    return internalErrorResponse();
   }
 }

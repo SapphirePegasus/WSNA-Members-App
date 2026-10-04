@@ -1,5 +1,8 @@
 import { callDataverse } from "./dataverseClient";
 import { buildODataEqFilter } from "./odata";
+import { normalizeEmail } from "@/app/lib/email";
+import { logEvent } from "@/app/lib/safeLog";
+import { UpstreamUnavailableError } from "@/app/lib/upstream";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MEMBERSHIP TYPE CLASSIFICATION
@@ -90,9 +93,8 @@ const CONTACT_EXPAND = [
 
 const FACILITY_ACCOUNT_TYPE = 551050000;
 
-// Practical maximum length of an email address (RFC 5321). Anything longer
-// cannot be a real address, so it is rejected before any query is built.
-const EMAIL_MAX_LENGTH = 254;
+// Rows requested per lookup. Two is the minimum that can reveal a duplicate.
+const LOOKUP_PAGE_SIZE = 2;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ContactRecord
@@ -206,34 +208,44 @@ function normalizeContact(
 // RETURN TYPE
 // Three distinct outcomes the caller must handle explicitly:
 //   ContactRecord   → contact found and classified (member or non-member)
-//   null            → contact not found in Dataverse at all
+//   null            → no usable record: not found, or more than one match
 //   "unrecognized"  → contact found but membertype/status matches no category
 //
-// Using a discriminated union literal rather than throwing forces the caller
-// to handle all cases at compile time — no silent swallowing of edge cases.
+// Failure to REACH Dataverse is never one of these outcomes. It is thrown as
+// UpstreamUnavailableError, so an outage is never mistaken for "not a member".
 // ─────────────────────────────────────────────────────────────────────────────
 export type GetContactResult = ContactRecord | null | "unrecognized";
+
+// A response that is not a well-formed OData collection is an upstream fault.
+// Treating a missing `value` as "not found" would turn a malformed response
+// into a false "you are not a member".
+function extractRows(data: unknown): RawContactDataverse[] {
+    if (
+        typeof data === "object" &&
+        data !== null &&
+        Array.isArray((data as { value?: unknown }).value)
+    ) {
+        return (data as { value: RawContactDataverse[] }).value;
+    }
+    throw new UpstreamUnavailableError("upstream-error");
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // getContactByEmail
 //
 // DATA-01: the email is OData-escaped (apostrophes doubled) and then
-// URI-encoded inside buildODataEqFilter - two separate layers, one helper.
+// URI-encoded inside buildODataEqFilter - two layers, one helper.
 //
-// NOTE (REVIEW-06): $top=1 is intentionally unchanged here. Duplicate
-// detection (query $top=2, fail closed on >1 match) is a separate ticket
-// that depends on the Dataverse owner's answer on email uniqueness.
+// REVIEW-06: requests two rows so a duplicate is detectable. Email uniqueness
+// is enforced in Dataverse, so more than one row should be impossible; if it
+// ever happens the lookup fails closed (no usable record) and emits an
+// alertable event that contains no email.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function getContactByEmail(
     email: string
 ): Promise<GetContactResult> {
-    const normalizedEmail = email.trim().toLowerCase();
-
-    // A token-derived address that is empty or impossibly long is treated as
-    // "no record" without querying Dataverse.
-    if (normalizedEmail === "" || normalizedEmail.length > EMAIL_MAX_LENGTH) {
-        return null;
-    }
+    const normalizedEmail = normalizeEmail(email);
+    if (normalizedEmail === null) return null;
 
     const filter = buildODataEqFilter("emailaddress1", normalizedEmail);
 
@@ -242,16 +254,18 @@ export async function getContactByEmail(
         `?$select=${CONTACT_SELECT}` +
         `&$filter=${filter}` +
         `&$expand=${CONTACT_EXPAND}` +
-        `&$top=1`;
+        `&$top=${LOOKUP_PAGE_SIZE}`;
 
-    const data = await callDataverse(path);
+    const rows = extractRows(await callDataverse(path));
 
-    if (!data.value || data.value.length === 0) {
+    if (rows.length === 0) return null;
+
+    if (rows.length > 1) {
+        logEvent("contact.ambiguous");
         return null;
     }
 
-    const raw = data.value[0] as RawContactDataverse;
-    const contact = normalizeContact(raw);
+    const contact = normalizeContact(rows[0]);
 
     // Contact row exists but membertype/status is unrecognised.
     // Distinct from null (not found) so the API route and UI

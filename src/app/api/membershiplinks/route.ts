@@ -1,54 +1,25 @@
-import { NextResponse } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 import type {
     MembershipLinksResponse,
     MembershipLink,
 } from "@/app/types/membership";
 import { parseMembershipLinksRequest } from "@/app/lib/validate";
-import { verifyAuth, VerifyAuthError } from "@/app/lib/verifyAuth";
-import { getCraftToken, getWsnaApiBase } from "@/app/lib/env";
+import { authorizeMember } from "@/app/lib/authorizeMember";
+import { craftQuery, extractEntries } from "@/app/lib/craftClient";
+import { UpstreamUnavailableError } from "@/app/lib/upstream";
+import {
+    deniedResponse,
+    errorResponse,
+    jsonNoStore,
+    upstreamUnavailableResponse,
+} from "@/app/lib/apiResponse";
+import { logEvent, logSafeError } from "@/app/lib/safeLog";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GRAPHQL FETCHER
-// Single responsibility - HTTP transport and error handling only.
-// All query construction happens in the individual fetch functions below.
-// Throws on non-2xx or GraphQL errors - callers handle gracefully.
-//
-// Note: next.revalidate is intentionally omitted here. Next.js does not
-// apply fetch caching to calls made inside POST route handlers. Caching
-// for membership links is handled at the client layer via the
-// useMembershipLinks hook (module-level cache keyed by contactId,
-// session-scoped). No duplicate network requests occur in normal usage.
+// All Craft access goes through craftClient (cache, single-flight, timeout).
+// The fetch functions below THROW on failure; the handler decides how a partial
+// or total failure is presented.
 // ─────────────────────────────────────────────────────────────────────────────
-async function craftQuery<T>(
-    query: string,
-    variables?: Record<string, unknown>
-): Promise<T> {
-    const res = await fetch(getWsnaApiBase(), {
-        method: "POST",
-        headers: {
-            Authorization: `Bearer ${getCraftToken()}`,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query, variables }),
-    });
-
-    if (!res.ok) {
-        throw new Error(
-            `Craft GraphQL request failed: ${res.status} ${res.statusText}`
-        );
-    }
-
-    const json = await res.json();
-
-    if (json.errors?.length) {
-        const messages = json.errors
-            .map((e: { message: string }) => e.message)
-            .join("; ");
-        throw new Error(`Craft GraphQL errors: ${messages}`);
-    }
-
-    return json.data as T;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUERY 1 - LOCAL UNIT
@@ -71,57 +42,38 @@ const LOCAL_UNIT_QUERY = `
     }
 `;
 
-interface LocalUnitQueryResult {
-    entries: Array<{
-        title: string;
-        slug: string;
-    }>;
-}
-
 async function fetchLocalUnit(
     facilityCode: string
 ): Promise<MembershipLink | null> {
-    try {
-        const data = await craftQuery<LocalUnitQueryResult>(
-            LOCAL_UNIT_QUERY,
-            { facilityCode: [facilityCode] }
-        );
+    const data = await craftQuery(
+        LOCAL_UNIT_QUERY,
+        { facilityCode: [facilityCode] },
+        `localUnit:${facilityCode}`
+    );
 
-        const entry = data.entries?.[0];
-        if (!entry) return null;
-
-        return {
-            title: entry.title,
-            url: `https://www.wsna.org/union/${entry.slug}`,
-        };
-    } catch (err) {
-        // Isolated failure - does not affect other link sections
-        console.error("[membershiplinks] Local unit fetch failed:", err);
+    const entry = extractEntries(data)[0];
+    if (!entry) return null;
+    if (typeof entry.title !== "string" || typeof entry.slug !== "string") {
         return null;
     }
+
+    return {
+        title: entry.title,
+        url: `https://www.wsna.org/union/${encodeURIComponent(entry.slug)}`,
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUERY 2 - REGIONAL NURSES ASSOCIATION
 // districtCode comes from wsna_district.wsna_name in Dataverse (e.g. "NW").
 //
-// regionCode is inlined as a string literal rather than passed as a typed
-// GraphQL variable. Craft's regionCode argument expects type [QueryArgument]
-// - a union scalar that accepts strings, integers, and booleans. When a
-// variable is declared as [String], Craft rejects the query because [String]
-// does not satisfy [QueryArgument] even though the value itself is valid.
-// Inlining the value bypasses the type mismatch entirely.
+// Uses GraphQL variables exclusively - no string interpolation.
+// regionCode is typed as [QueryArgument] to match the Craft CMS schema.
 //
 // Per spec:
 // - Filter returned entries by typeHandle = "regionalNursesAssociation"
 // - Multiple matches after filter = display nothing (log warning)
 // - websiteUrl null = return title with url: null (plain text, no icon)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// Uses GraphQL variables exclusively - no string interpolation.
-// regionCode is typed as [QueryArgument] to match the Craft CMS schema.
-// This is the correct type for Craft filter arguments and resolves the
-// type mismatch that previously forced inline string interpolation.
 // ─────────────────────────────────────────────────────────────────────────────
 const REGIONAL_QUERY = `
     query($regionCode: [QueryArgument]) {
@@ -133,59 +85,50 @@ const REGIONAL_QUERY = `
     }
 `;
 
-interface RegionalQueryResult {
-    entries: Array<{
-        title: string;
-        websiteUrl: string | null;
-        typeHandle: string;
-    }>;
-}
-
 async function fetchRegional(
     districtCode: string
 ): Promise<MembershipLink | null> {
-    try {
-        const data = await craftQuery<RegionalQueryResult>(
-            REGIONAL_QUERY,
-            { regionCode: [districtCode] }
+    const data = await craftQuery(
+        REGIONAL_QUERY,
+        { regionCode: [districtCode] },
+        `regional:${districtCode}`
+    );
+
+    const matches = extractEntries(data).filter(
+        (e) =>
+            e.typeHandle === "regionalNursesAssociation" &&
+            typeof e.title === "string"
+    );
+
+    if (matches.length === 0) return null;
+
+    // Per spec: multiple matches after type filter = display nothing
+    if (matches.length > 1) {
+        console.warn(
+            `[membershiplinks] Multiple regionalNursesAssociation entries ` +
+            `for district "${districtCode}" - displaying nothing per spec`
         );
-
-        const matches = data.entries?.filter(
-            (e) => e.typeHandle === "regionalNursesAssociation"
-        );
-
-        if (!matches || matches.length === 0) return null;
-
-        // Per spec: multiple matches after type filter = display nothing
-        if (matches.length > 1) {
-            console.warn(
-                `[membershiplinks] Multiple regionalNursesAssociation entries ` +
-                `for district "${districtCode}" - displaying nothing per spec`
-            );
-            return null;
-        }
-
-        return {
-            title: matches[0].title,
-            // Per spec: null url = render as plain text, no link, no icon
-            url: matches[0].websiteUrl ?? null,
-        };
-    } catch (err) {
-        console.error("[membershiplinks] Regional fetch failed:", err);
         return null;
     }
+
+    const match = matches[0];
+    return {
+        title: match.title as string,
+        // Per spec: null url = render as plain text, no link, no icon
+        url: typeof match.websiteUrl === "string" ? match.websiteUrl : null,
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUERY 3 - AFFILIATE ORGANISATIONS
-// Single query fetches all affiliate orgs. Three sections are filtered
-// client-side from this one response:
+// Single query fetches all affiliate orgs. Three sections are filtered from
+// this one response:
 //   - stateNursesAssociation  → WSNA Membership Benefits
 //   - nationalNursesAssociation → National Nurses Association
 //   - nationalUnion            → National Union (union members only)
 //
-// Confirmed working via Insomnia - all fields available at base entry level.
-// No inline fragments needed.
+// The query and its response are identical for every member (the union filter
+// is applied AFTER the cached fetch), so one cache entry serves everyone.
 //
 // URL priority per spec: benefitsPageUrl → websiteUrl → null
 // ─────────────────────────────────────────────────────────────────────────────
@@ -207,8 +150,24 @@ interface AffiliateEntry {
     typeHandle: string;
 }
 
-interface AffiliateQueryResult {
-    entries: AffiliateEntry[];
+// Keeps only well-formed entries and normalises URL fields to string | null.
+function toAffiliateEntries(
+    entries: Record<string, unknown>[]
+): AffiliateEntry[] {
+    const result: AffiliateEntry[] = [];
+    for (const e of entries) {
+        if (typeof e.title !== "string" || typeof e.typeHandle !== "string") {
+            continue;
+        }
+        result.push({
+            title: e.title,
+            typeHandle: e.typeHandle,
+            websiteUrl: typeof e.websiteUrl === "string" ? e.websiteUrl : null,
+            benefitsPageUrl:
+                typeof e.benefitsPageUrl === "string" ? e.benefitsPageUrl : null,
+        });
+    }
+    return result;
 }
 
 // Resolves URL per spec priority: benefitsPageUrl → websiteUrl → null
@@ -222,100 +181,117 @@ interface AffiliateResults {
     nationalUnion: MembershipLink | null;
 }
 
+const EMPTY_AFFILIATES: AffiliateResults = {
+    wsnaBenefits: null,
+    nationalNurses: null,
+    nationalUnion: null,
+};
+
 async function fetchAffiliates(
     isUnionMember: boolean
 ): Promise<AffiliateResults> {
-    try {
-        const data = await craftQuery<AffiliateQueryResult>(AFFILIATE_QUERY);
-        const entries = data.entries ?? [];
+    const data = await craftQuery(AFFILIATE_QUERY, undefined, "affiliates");
+    const entries = toAffiliateEntries(extractEntries(data));
 
-        // ── WSNA Membership Benefits ──────────────────────────────────────────
-        // Per spec: filter by typeHandle = "stateNursesAssociation"
-        // Per spec: multiple entries = display alphabetically
-        // No CRM condition - always shown if entry exists in Craft
-        const wsnaEntries = entries
-            .filter((e) => e.typeHandle === "stateNursesAssociation")
-            .sort((a, b) => a.title.localeCompare(b.title));
+    // ── WSNA Membership Benefits ──────────────────────────────────────────
+    // Per spec: filter by typeHandle = "stateNursesAssociation"
+    // Per spec: multiple entries = display alphabetically
+    // No CRM condition - always shown if entry exists in Craft
+    // (.filter() returns a NEW array, so sorting never mutates the cache.)
+    const wsnaEntries = entries
+        .filter((e) => e.typeHandle === "stateNursesAssociation")
+        .sort((a, b) => a.title.localeCompare(b.title));
 
-        const wsnaBenefits: MembershipLink | null =
-            wsnaEntries.length > 0
-                ? {
-                    title: wsnaEntries[0].title,
-                    url: resolveAffiliateUrl(wsnaEntries[0]),
-                }
-                : null;
+    const wsnaBenefits: MembershipLink | null =
+        wsnaEntries.length > 0
+            ? {
+                title: wsnaEntries[0].title,
+                url: resolveAffiliateUrl(wsnaEntries[0]),
+            }
+            : null;
 
-        // ── National Nurses Association ───────────────────────────────────────
-        // Per spec: multiple entries = display alphabetically
-        // No CRM condition - always shown if entry exists in Craft
-        const nnaEntries = entries
-            .filter((e) => e.typeHandle === "nationalNursesAssociation")
-            .sort((a, b) => a.title.localeCompare(b.title));
+    // ── National Nurses Association ───────────────────────────────────────
+    // Per spec: multiple entries = display alphabetically
+    // No CRM condition - always shown if entry exists in Craft
+    const nnaEntries = entries
+        .filter((e) => e.typeHandle === "nationalNursesAssociation")
+        .sort((a, b) => a.title.localeCompare(b.title));
 
-        const nationalNurses: MembershipLink | null =
-            nnaEntries.length > 0
-                ? {
-                    title: nnaEntries[0].title,
-                    url: resolveAffiliateUrl(nnaEntries[0]),
-                }
-                : null;
+    const nationalNurses: MembershipLink | null =
+        nnaEntries.length > 0
+            ? {
+                title: nnaEntries[0].title,
+                url: resolveAffiliateUrl(nnaEntries[0]),
+            }
+            : null;
 
-        // ── National Union ────────────────────────────────────────────────────
-        // Per spec: only shown to union members (wsna_showaft = true)
-        // Per spec: multiple entries = [DATA NEEDED from WSNA]
-        // Current behaviour: use first entry, log warning if multiple found
-        let nationalUnion: MembershipLink | null = null;
+    // ── National Union ────────────────────────────────────────────────────
+    // Per spec: only shown to union members (wsna_showaft = true)
+    // Per spec: multiple entries = [DATA NEEDED from WSNA]
+    // Current behaviour: use first entry, log warning if multiple found
+    let nationalUnion: MembershipLink | null = null;
 
-        if (isUnionMember) {
-            const nuEntries = entries.filter(
-                (e) => e.typeHandle === "nationalUnion"
+    if (isUnionMember) {
+        const nuEntries = entries.filter((e) => e.typeHandle === "nationalUnion");
+
+        if (nuEntries.length > 1) {
+            console.warn(
+                "[membershiplinks] Multiple nationalUnion entries found - " +
+                "using first. Clarify handling with WSNA."
             );
-
-            if (nuEntries.length > 1) {
-                console.warn(
-                    "[membershiplinks] Multiple nationalUnion entries found - " +
-                    "using first. Clarify handling with WSNA."
-                );
-            }
-
-            if (nuEntries.length > 0) {
-                nationalUnion = {
-                    title: nuEntries[0].title,
-                    url: resolveAffiliateUrl(nuEntries[0]),
-                };
-            }
         }
 
-        return { wsnaBenefits, nationalNurses, nationalUnion };
-
-    } catch (err) {
-        console.error("[membershiplinks] Affiliate fetch failed:", err);
-        return { wsnaBenefits: null, nationalNurses: null, nationalUnion: null };
+        if (nuEntries.length > 0) {
+            nationalUnion = {
+                title: nuEntries[0].title,
+                url: resolveAffiliateUrl(nuEntries[0]),
+            };
+        }
     }
+
+    return { wsnaBenefits, nationalNurses, nationalUnion };
+}
+
+// Each query is independent. A PARTIAL failure still returns what succeeded
+// (the failed section is omitted). If EVERY query we attempted failed, the
+// handler returns 503/500 instead of an empty 200: the client caches a
+// successful response for the whole session, so an outage must not be cached
+// as "this member has no links".
+function logQueryFailure(label: string, reason: unknown): void {
+    if (reason instanceof UpstreamUnavailableError) {
+        logEvent("membershiplinks.query_failed", {
+            query: label,
+            reason: reason.reason,
+        });
+        return;
+    }
+    logSafeError(`membershiplinks:${label}`, reason);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROUTE HANDLER
 // POST /api/membershiplinks
 //
-// Receives MembershipLinksRequest built from the authenticated contact's
-// data in UserContext. All three GraphQL query groups fire in parallel via
-// Promise.allSettled - one failing does not prevent others from returning.
+// authorizeMember enforces identity, the per-identity rate limit and Dataverse
+// eligibility (via the proof cookie) BEFORE any Craft traffic. The three query
+// groups then run in parallel via Promise.allSettled.
 //
-// wsnaBenefits is intentionally absent from the response.
+// Responses (all carry Cache-Control: private, no-store - CACHE-01):
+//   200 - MembershipLinksResponse
+//   400 - malformed request body
+//   401 - missing or invalid credential
+//   403 - authenticated but not an eligible member (AUTH-02)
+//   429 - per-identity rate limit exceeded (Retry-After)
+//   500 - unexpected server error
+//   503 - Craft CMS unavailable for every attempted query (Retry-After)
 // ─────────────────────────────────────────────────────────────────────────────
-export async function POST(req: Request): Promise<NextResponse> {
-    // ── Auth guard ────────────────────────────────────────────────────────────
+export async function POST(req: NextRequest): Promise<NextResponse> {
     try {
-        await verifyAuth(req);
-    } catch (err) {
-        if (err instanceof VerifyAuthError) {
-            return NextResponse.json({ error: err.message }, { status: err.status });
-        }
-        return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
-    }
+        // ── Authentication, throttling, eligibility ───────────────────────────
+        const auth = await authorizeMember(req, "membershiplinks");
+        if (auth.kind === "rejected") return auth.response;
+        if (auth.kind === "denied") return deniedResponse(auth.reason);
 
-    try {
         // Guard against empty body - can occur during Next.js dev-mode
         const contentLength = req.headers.get("content-length");
         const contentType = req.headers.get("content-type") ?? "";
@@ -324,54 +300,35 @@ export async function POST(req: Request): Promise<NextResponse> {
             contentLength === "0" ||
             !contentType.includes("application/json")
         ) {
-            return NextResponse.json(
-                { error: "Request body is required" },
-                { status: 400 }
-            );
+            return errorResponse("Request body is required", 400);
         }
 
-        // ── Parse and validate request body ──────────────────────────────────────
+        // ── Parse and validate request body ──────────────────────────────────
+        // facilityCode and districtCode may be null (none assigned in CRM).
+        // parseMembershipLinksRequest guarantees all three fields are present
+        // and correctly typed.
         const parsed = await parseMembershipLinksRequest(req);
         if (parsed.error) return parsed.error;
 
         const { facilityCode, districtCode, isUnionMember } = parsed.data;
 
-        // facilityCode and districtCode may be null
-        // null means no facility or district assigned in CRM.
-        // undefined means the field was missing from the request entirely.
-        if (
-            facilityCode === undefined ||
-            districtCode === undefined ||
-            isUnionMember === undefined
-        ) {
-            return NextResponse.json(
-                { error: "Missing required fields in request body" },
-                { status: 400 }
-            );
-        }
-
-        // ── Parallel GraphQL execution ────────────────────────────────────────
-        // All three queries fire simultaneously. Promise.allSettled ensures
-        // that one query failure does not abort or affect the others.
-        // Each individual fetch function also has its own try/catch so
-        // allSettled is a second safety net, not the primary error boundary.
-
-        // Validate districtCode format before passing to any query.
-        // District codes from Dataverse are short uppercase alphanumeric strings.
-        // Reject anything that doesn't match - do not pass unexpected shapes
-        // to external systems even via GraphQL variables.
+        // District codes from Dataverse are short uppercase alphanumeric
+        // strings. Reject anything else - do not pass unexpected shapes to
+        // external systems even via GraphQL variables.
         const safeDistrictCode =
             districtCode !== null && /^[A-Z0-9]{1,10}$/.test(districtCode)
                 ? districtCode
                 : null;
 
         if (districtCode !== null && safeDistrictCode === null) {
-            console.warn(
-                "[membershiplinks] districtCode failed format validation - skipping regional query"
-            );
+            logEvent("membershiplinks.invalid_district_code");
         }
 
-        const [localUnitResult, regionalResult, affiliatesResult] =
+        // ── Parallel Craft execution ──────────────────────────────────────────
+        const wantsLocalUnit = facilityCode !== null;
+        const wantsRegional = safeDistrictCode !== null;
+
+        const [localSettled, regionalSettled, affiliatesSettled] =
             await Promise.allSettled([
                 facilityCode !== null
                     ? fetchLocalUnit(facilityCode)
@@ -382,20 +339,37 @@ export async function POST(req: Request): Promise<NextResponse> {
                 fetchAffiliates(isUnionMember),
             ]);
 
-        const localUnit =
-            localUnitResult.status === "fulfilled"
-                ? localUnitResult.value
-                : null;
+        const failures: unknown[] = [];
+        let attempted = 0;
 
-        const regional =
-            regionalResult.status === "fulfilled"
-                ? regionalResult.value
-                : null;
+        const collect = <T,>(
+            wasAttempted: boolean,
+            label: string,
+            settled: PromiseSettledResult<T | null>
+        ): T | null => {
+            if (!wasAttempted) return null;
+            attempted += 1;
+            if (settled.status === "fulfilled") return settled.value;
+            failures.push(settled.reason);
+            logQueryFailure(label, settled.reason);
+            return null;
+        };
 
+        const localUnit = collect(wantsLocalUnit, "localUnit", localSettled);
+        const regional = collect(wantsRegional, "regional", regionalSettled);
         const affiliates =
-            affiliatesResult.status === "fulfilled"
-                ? affiliatesResult.value
-                : { wsnaBenefits: null, nationalNurses: null, nationalUnion: null };
+            collect(true, "affiliates", affiliatesSettled) ?? EMPTY_AFFILIATES;
+
+        // Everything we tried failed: do not return (and let the client cache)
+        // an empty success.
+        if (attempted > 0 && failures.length === attempted) {
+            const unavailable = failures.find(
+                (f): f is UpstreamUnavailableError =>
+                    f instanceof UpstreamUnavailableError
+            );
+            if (unavailable) return upstreamUnavailableResponse(unavailable);
+            return errorResponse("Server error loading membership links", 500);
+        }
 
         const response: MembershipLinksResponse = {
             localUnits: localUnit ? [localUnit] : [],
@@ -403,15 +377,11 @@ export async function POST(req: Request): Promise<NextResponse> {
             wsnaBenefits: affiliates.wsnaBenefits,
             nationalNurses: affiliates.nationalNurses,
             nationalUnion: affiliates.nationalUnion,
-        };;
+        };
 
-        return NextResponse.json(response);
-
+        return auth.applyProof(jsonNoStore(response));
     } catch (err) {
-        console.error("[membershiplinks] Unexpected error:", err);
-        return NextResponse.json(
-            { error: "Server error loading membership links" },
-            { status: 500 }
-        );
+        logSafeError("api/membershiplinks", err);
+        return errorResponse("Server error loading membership links", 500);
     }
 }

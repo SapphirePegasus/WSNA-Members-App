@@ -1,28 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 import { normaliseFileKind } from "@/app/lib/fileIconMap";
 import type { RawTopicEntry, ResourcesApiResponse } from "@/app/types/resources";
-import { verifyAuth, VerifyAuthError } from "@/app/lib/verifyAuth";
 import { validateSectionParam } from "@/app/lib/validate";
-import { getCraftToken, getWsnaApiBase } from "@/app/lib/env";
-
-//const GRAPHQL_URL = process.env.NEXT_PUBLIC_WSNA_API_BASE!;
-//const TOKEN = process.env.CRAFT_GRAPHQL_TOKEN!;
-
-// Server-side only: how long Next.js may reuse the Craft GraphQL response in
-// its own Data Cache. This is NOT sent to clients. Responses from this route
-// are never cacheable by browsers, CDNs or shared proxies (CACHE-01).
-const CRAFT_REVALIDATE_SECONDS = 300;
-
-// CACHE-01: protected responses - success and error - are private and
-// non-storable. Also enforced in next.config.ts and proxy.ts; set here so this
-// endpoint does not depend on those layers alone.
-const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" } as const;
+import { authorizeMember } from "@/app/lib/authorizeMember";
+import { craftQuery, extractEntries } from "@/app/lib/craftClient";
+import { UpstreamUnavailableError } from "@/app/lib/upstream";
+import {
+  deniedResponse,
+  errorResponse,
+  jsonNoStore,
+  upstreamUnavailableResponse,
+} from "@/app/lib/apiResponse";
+import { logSafeError } from "@/app/lib/safeLog";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GRAPHQL QUERY
 // Fetches all entries in a given section ordered by Craft's lft (left) value,
 // which preserves the structure order defined in the CMS.
-// The $section variable is injected at runtime from the query-string param.
+// The $section variable is injected at runtime from the query-string param,
+// which validateSectionParam has already restricted to released handles.
 // ─────────────────────────────────────────────────────────────────────────────
 const RESOURCES_QUERY = `
   query ResourceTopics($section: [String]) {
@@ -54,44 +50,19 @@ const RESOURCES_QUERY = `
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GRAPHQL FETCHER
-// Thin wrapper around fetch - keeps the route handler readable.
-// Throws on non-2xx so the caller can catch and return a 500.
+// FETCH + NORMALISE
+// Transport, caching and timeouts live in craftClient. Cached responses are
+// shared by reference, so the mapping below builds NEW objects and never
+// mutates the entries it receives.
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchResourceTopics(section: string): Promise<RawTopicEntry[]> {
-  const response = await fetch(getWsnaApiBase(), {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${getCraftToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: RESOURCES_QUERY,
-      variables: { section: [section] },
-    }),
-    // Next.js Data Cache - revalidates server-side every
-    // CRAFT_REVALIDATE_SECONDS. Unrelated to the Cache-Control header sent
-    // to clients, which is always private, no-store.
-    next: { revalidate: CRAFT_REVALIDATE_SECONDS },
-  });
+  const data = await craftQuery(
+    RESOURCES_QUERY,
+    { section: [section] },
+    `resources:${section}` // `section` is allowlisted, so this key space is tiny
+  );
 
-  if (!response.ok) {
-    throw new Error(
-      `Craft CMS GraphQL request failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  const json = await response.json();
-
-  if (json.errors?.length) {
-    // GraphQL can return HTTP 200 with errors in the body - check explicitly.
-    const messages = json.errors
-      .map((e: { message: string }) => e.message)
-      .join("; ");
-    throw new Error(`Craft CMS GraphQL errors: ${messages}`);
-  }
-
-  const rawEntries: unknown[] = json.data?.entries ?? [];
+  const rawEntries = extractEntries(data);
 
   // ───────────────────────────────────────────────────────────────────────────
   // NORMALISATION
@@ -100,7 +71,7 @@ async function fetchResourceTopics(section: string): Promise<RawTopicEntry[]> {
   // downstream works with typed, validated data - never raw wire format.
   // Null-coerce subtitle so components never receive undefined.
   // ───────────────────────────────────────────────────────────────────────────
-  return (rawEntries as Record<string, unknown>[]).map((entry) => {
+  return rawEntries.map((entry) => {
     const rawFiles = (entry.files as Record<string, unknown>[] | undefined) ?? [];
 
     return {
@@ -135,42 +106,35 @@ async function fetchResourceTopics(section: string): Promise<RawTopicEntry[]> {
 //   200 - ResourcesApiResponse JSON
 //   400 - missing or invalid/unreleased section param
 //   401 - missing or invalid credential
-//   500 - upstream Craft CMS error
+//   403 - authenticated but not an eligible member (AUTH-02)
+//   429 - per-identity rate limit exceeded (Retry-After)
+//   500 - unexpected server error
+//   503 - Craft CMS unavailable (Retry-After)
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  // ── Auth guard ────────────────────────────────────────────────────────────
   try {
-    await verifyAuth(request);
-  } catch (err) {
-    if (err instanceof VerifyAuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
-  }
+    const auth = await authorizeMember(request, "resources");
+    if (auth.kind === "rejected") return auth.response;
+    if (auth.kind === "denied") return deniedResponse(auth.reason);
 
-  const { searchParams } = request.nextUrl;
-  const section = searchParams.get("section")?.trim();
+    const section = request.nextUrl.searchParams.get("section")?.trim();
 
-  const sectionResult = validateSectionParam(section);
-  if (sectionResult.error) return sectionResult.error;
+    const sectionResult = validateSectionParam(section);
+    if (sectionResult.error) return sectionResult.error;
 
-  const validatedSection = sectionResult.data;
-
-  try {
-    const topics = await fetchResourceTopics(validatedSection);
-
+    const topics = await fetchResourceTopics(sectionResult.data);
     const body: ResourcesApiResponse = { topics };
 
-    return NextResponse.json(body, {
-      status: 200,
-      headers: NO_STORE_HEADERS,
-    });
-  } catch (error) {
-    console.error("[resources/route] Failed to fetch resource topics:", error);
+    return auth.applyProof(jsonNoStore(body));
+  } catch (err) {
+    if (err instanceof UpstreamUnavailableError) {
+      return upstreamUnavailableResponse(err);
+    }
 
-    return NextResponse.json(
-      { error: "Failed to load resources. Please try again later." },
-      { status: 500, headers: NO_STORE_HEADERS }
+    logSafeError("api/resources", err);
+    return errorResponse(
+      "Failed to load resources. Please try again later.",
+      500
     );
   }
 }

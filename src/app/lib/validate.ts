@@ -139,9 +139,8 @@ export async function parseMembershipLinksRequest(
 //               (src/config/resourceSections.ts), so unreleased or invented
 //               handles never reach Craft.
 //
-// Both failures return the SAME message so a caller cannot distinguish
-// "malformed" from "valid but unreleased" and enumerate which handles exist.
-// The success type is the narrowed ReleasedResourceSection, not string.
+// Both failures return the SAME message so a caller cannot tell "malformed"
+// from "valid but unreleased" and enumerate which handles exist.
 // ─────────────────────────────────────────────────────────────────────────────
 const SECTION_PATTERN = /^[a-zA-Z0-9_]{1,100}$/;
 

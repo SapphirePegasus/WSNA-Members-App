@@ -1,172 +1,114 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS } from "@/config/limits";
+import { createPerMinuteLimiter } from "@/app/lib/rateLimit";
+import { logEvent } from "@/app/lib/safeLog";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Edge middleware a.k.a proxy - runs before every matched request.
-// Responsibilities:
-//   1. Rate limiting on API routes
-//   2. Cache-Control: private, no-store on API responses generated or passed
-//      through here (CACHE-01)
+// Next.js 16 proxy (formerly middleware) - runs before every matched request.
+//   1. A per-client-IP FLOOD GUARD on API routes (coarse and generous).
+//   2. Cache-Control: private, no-store on API responses (CACHE-01).
 //
-// MSAL note: MSAL authentication is handled client-side via AuthGuard
-// components and server-side via verifyAuth in individual API routes.
-// Do not add MSAL token verification here - the edge runtime does not
-// have access to the full Node.js crypto APIs that jose requires in all
-// environments. Auth belongs in the route handlers.
+// NOT the fair-use limiter: many members share one office NAT address, so IP
+// limits must stay generous. Fair-use limiting is per verified identity, after
+// authentication, in authorizeMember. Authentication stays in the route
+// handlers - do not add token verification here.
+//
+// Limiter state is per server instance (best-effort on serverless).
+//
+// Client IP comes from x-forwarded-for, which the hosting platform sets
+// (Vercel restricts these headers to prevent spoofing). If a CDN or reverse
+// proxy is ever placed IN FRONT of the platform, that header may be
+// overwritten and clientKey() must be revisited.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// CACHE-01: every API response must be uncacheable by browsers, CDNs and
-// shared proxies. Mirrors next.config.ts and the resources route.
+// CACHE-01: mirrors next.config.ts and the route handlers.
 const NO_STORE = "private, no-store";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RATE LIMITER
-// Sliding window counter - per IP, per route group, per region.
-// No external dependencies - uses a module-level Map on the edge runtime.
-//
-// Limits are intentionally conservative for a member portal:
-//   /api/contact        - 60 req/min  (login flow, should be infrequent)
-//   /api/membershiplinks - 60 req/min  (card loads, tab switches)
-//   /api/resources      - 60 req/min  (resource tabs, cached client-side)
-//   all other /api/*    - 60 req/min  (catch-all for any future routes)
-//
-// Window: 60 seconds sliding
-// ─────────────────────────────────────────────────────────────────────────────
+const CONTACT_PATH = "/api/contact";
+const UNKNOWN_CLIENT = "unknown";
 
-interface RateLimitEntry {
-    count: number;
-    windowStart: number;
-}
+// Characters and length of any IPv4 / IPv6 text. Anything else (garbage or a
+// spoof attempt) shares ONE "unknown" bucket instead of minting new keys.
+const CLIENT_KEY_PATTERN = /^[0-9a-fA-F:.]{2,45}$/;
 
-// Module-level - persists across requests within the same edge runtime instance
-const rateLimitStore = new Map<string, RateLimitEntry>();
+const apiLimiter = createPerMinuteLimiter(
+    LIMITS.ip.apiPerMinute,
+    LIMITS.rateLimiter.maxKeys
+);
+const contactLimiter = createPerMinuteLimiter(
+    LIMITS.ip.contactPerMinute,
+    LIMITS.rateLimiter.maxKeys
+);
 
-const WINDOW_MS = 60_000; // 60 seconds
-
-const LIMITS: Record<string, number> = {
-    "/api/contact": 60,
-    "/api/membershiplinks": 60,
-    "/api/resources": 60,
-};
-
-const DEFAULT_LIMIT = 60;
-
-// Cleanup entries older than 2 windows to prevent unbounded memory growth.
-// Called on every request - not expensive because Map iteration is O(n) and the
-// store will be small (one entry per active IP per route).
-function pruneExpired(): void {
-    const now = Date.now();
-    for (const [key, entry] of rateLimitStore) {
-        if (now - entry.windowStart > WINDOW_MS * 2) {
-            rateLimitStore.delete(key);
-        }
-    }
-}
-
-function getClientIp(req: NextRequest): string {
-    // Vercel sets x-forwarded-for reliably - first IP is the real client
+function clientKey(req: NextRequest): string {
     const forwarded = req.headers.get("x-forwarded-for");
-    if (forwarded) {
-        return forwarded.split(",")[0].trim();
-    }
-    // Fallback - should not occur on Vercel but defensive
-    return req.headers.get("x-real-ip") ?? "unknown";
+    const candidate = (
+        forwarded ? forwarded.split(",")[0] : (req.headers.get("x-real-ip") ?? "")
+    ).trim();
+
+    return CLIENT_KEY_PATTERN.test(candidate)
+        ? candidate.toLowerCase()
+        : UNKNOWN_CLIENT;
 }
 
-function checkRateLimit(
-    ip: string,
-    pathname: string
-): { allowed: boolean; remaining: number; resetInMs: number } {
-    pruneExpired();
+// A flood can produce thousands of rejections a minute. Logging each would
+// turn an attack into a log-volume problem, so log at most once per interval.
+const LOG_INTERVAL_MS = 10_000;
+let lastRejectionLoggedAt = Number.NEGATIVE_INFINITY;
 
-    // Match the most specific route first, then fall back to default
-    const limit =
-        LIMITS[pathname] ??
-        (pathname.startsWith("/api/") ? DEFAULT_LIMIT : null);
-
-    // Not an API route - no limit applies
-    if (limit === null) {
-        return { allowed: true, remaining: Infinity, resetInMs: 0 };
+function tooManyRequests(
+    scope: "api" | "contact",
+    retryAfterSeconds: number
+): NextResponse {
+    const now = performance.now();
+    if (now - lastRejectionLoggedAt >= LOG_INTERVAL_MS) {
+        lastRejectionLoggedAt = now;
+        logEvent("ip.rate_limited", { scope });
     }
 
-    const now = Date.now();
-    const key = `${ip}:${pathname}`;
-    const entry = rateLimitStore.get(key);
-
-    // No existing entry or window has expired - start a new window
-    if (!entry || now - entry.windowStart >= WINDOW_MS) {
-        rateLimitStore.set(key, { count: 1, windowStart: now });
-        return { allowed: true, remaining: limit - 1, resetInMs: WINDOW_MS };
-    }
-
-    // Within existing window
-    if (entry.count >= limit) {
-        const resetInMs = WINDOW_MS - (now - entry.windowStart);
-        return { allowed: false, remaining: 0, resetInMs };
-    }
-
-    entry.count += 1;
-    return {
-        allowed: true,
-        remaining: limit - entry.count,
-        resetInMs: WINDOW_MS - (now - entry.windowStart),
-    };
+    return NextResponse.json(
+        { error: "Too many requests. Please try again shortly." },
+        {
+            status: 429,
+            headers: {
+                "Cache-Control": NO_STORE,
+                "Retry-After": String(retryAfterSeconds),
+            },
+        }
+    );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MIDDLEWARE (PROXY) HANDLER
-// ─────────────────────────────────────────────────────────────────────────────
 export function proxy(req: NextRequest): NextResponse {
     const { pathname } = req.nextUrl;
 
-    // Only rate limit API routes
+    // Defensive: the matcher already restricts this to /api/*.
     if (!pathname.startsWith("/api/")) {
         return NextResponse.next();
     }
 
-    const ip = getClientIp(req);
-    const { allowed, remaining, resetInMs } = checkRateLimit(ip, pathname);
+    const key = clientKey(req);
 
-    if (!allowed) {
-        return NextResponse.json(
-            { error: "Too many requests. Please try again shortly." },
-            {
-                status: 429,
-                headers: {
-                    "Cache-Control": NO_STORE,
-                    "Retry-After": String(Math.ceil(resetInMs / 1000)),
-                    "X-RateLimit-Limit": String(LIMITS[pathname] ?? DEFAULT_LIMIT),
-                    "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": String(
-                        Math.ceil((Date.now() + resetInMs) / 1000)
-                    ),
-                },
-            }
-        );
+    // The route-specific cap is checked first so a throttled /api/contact
+    // flood does not also drain the shared /api budget for everyone else
+    // behind the same address.
+    if (pathname.replace(/\/+$/, "") === CONTACT_PATH) {
+        const decision = contactLimiter.consume(key);
+        if (!decision.allowed) {
+            return tooManyRequests("contact", decision.retryAfterSeconds);
+        }
     }
 
-    // Pass through with rate limit headers so clients can self-throttle
+    const decision = apiLimiter.consume(key);
+    if (!decision.allowed) {
+        return tooManyRequests("api", decision.retryAfterSeconds);
+    }
+
     const response = NextResponse.next();
     response.headers.set("Cache-Control", NO_STORE);
-    response.headers.set(
-        "X-RateLimit-Limit",
-        String(LIMITS[pathname] ?? DEFAULT_LIMIT)
-    );
-    response.headers.set("X-RateLimit-Remaining", String(remaining));
-    response.headers.set(
-        "X-RateLimit-Reset",
-        String(Math.ceil((Date.now() + resetInMs) / 1000))
-    );
-
     return response;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MATCHER
-// Tells Next.js which paths this middleware runs on.
-// Explicitly excludes static assets and Next.js internals for performance.
-// ─────────────────────────────────────────────────────────────────────────────
+// Only API routes are guarded; pages and static assets never pass through.
 export const config = {
-    matcher: [
-        "/api/:path*",
-    ],
+    matcher: ["/api/:path*"],
 };

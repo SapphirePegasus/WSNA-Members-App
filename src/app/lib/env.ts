@@ -67,6 +67,33 @@ export function getDataverseUrl(): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ELIGIBILITY PROOF SECRET - server-side only. Signs the eligibility proof
+// cookie. High-entropy, at least 32 characters. Generate with:
+//   openssl rand -base64 48
+// Use a DIFFERENT value for Production and Preview. Never prefix it with
+// NEXT_PUBLIC_. Rotating it only costs each active user one fresh lookup.
+// ─────────────────────────────────────────────────────────────────────────────
+const ELIGIBILITY_SECRET_MIN_LENGTH = 32;
+
+export function getEligibilityProofSecret(): string {
+    const value = requireServerEnv("ELIGIBILITY_PROOF_SECRET");
+    if (value.length < ELIGIBILITY_SECRET_MIN_LENGTH) {
+        throw new Error(
+            `[env] ELIGIBILITY_PROOF_SECRET must be at least ` +
+            `${ELIGIBILITY_SECRET_MIN_LENGTH} characters. ` +
+            `Generate one with: openssl rand -base64 48`
+        );
+    }
+    return value;
+}
+
+// Centralised so no other module reads NODE_ENV directly for security
+// decisions (cookie flags, cookie name).
+export function isProduction(): boolean {
+    return process.env.NODE_ENV === "production";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC (CLIENT + SERVER)
 // Must use literal process.env.NEXT_PUBLIC_* access - Next.js static
 // analysis cannot inline dynamic process.env[key] lookups into the
