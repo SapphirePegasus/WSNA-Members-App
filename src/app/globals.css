@@ -1,0 +1,116 @@
+@import "tailwindcss";
+@import "./fonts.css";
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --primary: #0057b8;
+  --primary-100: #F0F7FF;
+  --primary-300: #59A6FD;
+  --primary-500: #004c97;
+  --danger-red: #DA291C;
+  --font-graphik: "Graphik Compact Web", Arial;
+  --font-graphikcompact: "Graphik Compact Web", Arial;
+  --font-graphik: "Graphik Web", Arial;
+  --font-produkt: "Produkt Web", Arial;
+}
+
+@theme {
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 1.75rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl: 2rem;
+  --text-4xl--line-height: 2.5rem;
+  --text-5xl: 2.25rem;
+  --text-5xl--line-height: 1;
+  --text-6xl: 2.625rem;
+  --text-6xl--line-height: 1;
+  --text-7xl: 3rem;
+  --text-7xl--line-height: 1;
+  --text-8xl: 3.375rem;
+  --text-8xl--line-height: 1;
+  --text-9xl: 3.75rem;
+  --text-9xl--line-height: 1;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-100: var(--primary-100);
+  --color-primary-300: var(--primary-300);
+  --color-primary-500: var(--primary-500);
+  --color-danger-red: var(--danger-red);
+  --font-sans: var(--font-graphikcompact);
+}
+
+/* Suppresses double-tap-to-zoom while keeping pan and pinch-zoom (A11Y-01).
+   Set on <html> so it applies to the whole touch target chain. */
+html {
+  touch-action: manipulation;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SAFE AREA UTILITIES
+   Consumed by fixed bottom navigation to push content above the OS gesture
+   bar on iPhone X+ and Android gesture-nav devices.
+
+   Requires viewport-fit=cover in the viewport meta tag (set in layout.tsx
+   via the Next.js Viewport export) — without it, env(safe-area-inset-bottom)
+   always resolves to 0 on iOS, making these utilities have no effect.
+
+   pb-safe: padding-bottom that is at minimum the standard value, but grows
+   to accommodate the OS gesture inset when one is present. The max() ensures
+   devices without a gesture bar still receive normal padding.
+
+   mb-safe: margin-bottom equivalent for cases where padding is not
+   appropriate (e.g. absolutely positioned elements needing clearance).
+   ───────────────────────────────────────────────────────────────────────────── */
+@utility pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+
+@utility pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SCROLLBAR UTILITY
+   ───────────────────────────────────────────────────────────────────────────── */
+@utility scrollbar-hidden {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  --primary: #0057b8;
+  --primary-100: #F0F7FF;
+  --primary-300: #59A6FD;
+  --primary-500: #004c97;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-graphikcompact);
+  font-weight: 400;
+  font-style: normal;
+}
